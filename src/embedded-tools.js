@@ -4,6 +4,7 @@ const {WebContentsView,shell}=require('electron');
 const {TOOL_URLS,allowedToolUrl,clampBounds}=require('./embedded-tools-urls');
 function createTools(window,notify){
   const byName=new Map();
+  let activeName=null;
   for(const [name,home] of Object.entries(TOOL_URLS)){
     const view=new WebContentsView({
       webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true}
@@ -34,7 +35,10 @@ function createTools(window,notify){
   });
   return {
     async show(name,rect){
-      for(const state of byName.values())state.view.setVisible(false);
+      if(name!==activeName){
+        for(const state of byName.values())state.view.setVisible(false);
+        activeName=name;
+      }
       if(name===null)return;
       const state=byName.get(name);
       if(!state)throw Error('Unknown Satisfactory tool.');

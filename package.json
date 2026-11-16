@@ -1,7 +1,7 @@
 {
   "name": "satisfactory-swiss-army-knife",
-  "version": "0.1.0",
-  "description": "Satisfactory factory companion, save viewer and blueprint manager",
+  "version": "0.2.0",
+  "description": "Live Satisfactory factory dashboard, embedded planners, map and blueprint manager",
   "main": "src/main.js",
   "license": "MIT",
   "author": "Swiss Army Knife contributors",

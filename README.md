@@ -1,83 +1,50 @@
 # Swiss Army Knife — Satisfactory Companion
 
-An unofficial **Windows desktop application** to inspect Satisfactory inventories and production, open the Satisfactory Calculator map and install community blueprints with a click.
+**Swiss Army Knife 0.2** is an unofficial Windows companion for live Satisfactory inventories, Satisfactory Calculator map/planners, and automatic community blueprint installation.
 
-## Zero-setup automatic mode
+## Live-first dashboard
 
-On launch, Swiss Army Knife scans local saves, reads the session name directly from the latest save header, displays that save's inventory snapshot, and automatically selects or creates its blueprint directory. Every 15 seconds it looks for a newer save and refreshes the snapshot. If the optional Ficsit Remote Monitoring HTTP endpoint is running, the app switches to live inventory and actual throughput rates (refreshed every 10 seconds); if it goes offline, it falls back to the last available save. It also reconnects automatically when monitoring becomes available.
+The first page connects automatically to Ficsit Remote Monitoring (FRM) on the local machine, using port 8080 by default. If the game or FRM is not yet running, it retries every 10 seconds. No save selection or uploading is required or displayed on the first page. On disconnect, the UI clearly labels the last inventory values as stale while continuing to reconnect.
 
-**No file picker, session-name entry, or manual folder moving is needed for an ordinary local single-player game.** There are optional advanced controls to select a different save or force a different blueprint session; use **Auto-detect** to return to the latest save. The first snapshot may take longer on very large saves.
+Live totals and throughput require the FRM mod to be installed and enabled via Satisfactory Mod Manager. The application does not silently install or configure mods. The port can be changed under Settings if FRM uses a different port.
 
-When two successive snapshots from the same session are available, the dashboard can estimate **net inventory change/minute** from the time difference between saves. That is NOT the gross production/consumption throughput provided by FRM. The precise throughput columns remain unavailable without telemetry.
+Inventory rows have game-generated icons extracted locally from FRM's Icons endpoint, with a fallback initial for missing icons. Columns include name, storage, Dimensional Depot, total, production/min, consumption/min and net/min. Click any column header to sort ascending/descending, and use the search box to filter items.
 
-### Limitations
+Satisfactory save headers are still scanned in the background solely to determine the blueprint session folder; factory counts on the dashboard come from live telemetry, not static save snapshots.
 
-- Live machine throughput still needs FRM (and potentially Production Stats) installed and running; a static save does not contain a live production meter. Installing or modifying Satisfactory's mod setup is not attempted silently.
-- The Satisfactory Calculator map is a third-party web application. The map opens from inside Swiss Army Knife, but the app does not automatically upload private save files to that website without a separate deliberate action.
-- Autosave monitoring only works while Swiss Army Knife is running. Launch the app to begin auto-discovery.
-- Cloud-only saves, nonstandard folders, remote dedicated servers, and some modded save formats may need extra setup or support.
+## Embedded Satisfactory Calculator tools
 
-## Integrated Satisfactory Calculator blueprint catalog
+- **Map:** https://satisfactory-calculator.com/en/interactive-map
+- **Production planner:** https://satisfactory-calculator.com/en/planners/production
+- **Power planner:** https://satisfactory-calculator.com/en/planners/power
 
-Blueprint Manager includes the actual Satisfactory Calculator community catalog within an isolated browser view. Search and navigate on the website, open a blueprint detail page, then click **Install this blueprint** in the app to trigger its SBP and SBP Config downloads. Downloads are installed automatically into the current detected save session. The site is independent and requires internet access; it may change its markup or restrict downloads. Manual import remains available.
+All three load inside separate sandboxed views in the application. They preserve their website session state when switching tabs, require an internet connection and are not cloned or scraped. If the site blocks embedding, use Open in browser from the relevant tab. Save uploads to Satisfactory Calculator remain a deliberate user action.
 
-## Current features
+## Blueprint catalog and automatic installation
 
-- Live factory monitor via the [Ficsit Remote Monitoring mod](https://ficsit.app/mod/FicsitRemoteMonitoring). The app queries its local HTTP API (default port 8080).
-- Searchable item list with storage, dimensional depot, total, production per minute, consumption per minute and net throughput.
-- Offline .sav loading using the community Satisfactory File Parser library. The program finds local saves automatically and supports a manual file picker.
-- An integrated launcher for the independent [Satisfactory Calculator interactive map](https://satisfactory-calculator.com/en/interactive-map). It opens in a sandboxed browser window and can also open in the default browser. Uploading a save to that site is manual.
-- Blueprint session selection, local .sbp/.sbpcfg/.zip import, and automatic installation of supported files downloaded from the [Satisfactory Calculator blueprint library](https://satisfactory-calculator.com/en/blueprints).
-- Automatic Windows portable EXE build workflow, with a downloadable GitHub Actions artifact after the build succeeds.
+Blueprint Manager embeds the original Satisfactory Calculator community catalog at https://satisfactory-calculator.com/en/blueprints. Search and browse its listings, open a blueprint detail page and click Install this blueprint to download both SBP and configuration files into the automatically detected game session. Manual SBP, SBPCFG and ZIP import is also supported.
 
-## Run the application
-
-Requirements: Windows and Node.js 20 or later.
-
-1. Clone the repository and open a terminal in it.
-2. Run **npm install**.
-3. Run **npm start**.
-4. For live rates, install Ficsit Remote Monitoring through Satisfactory Mod Manager, start Satisfactory with your save, and enable the FRM HTTP service if needed. Connect on localhost:8080 (or its configured port).
-5. Alternatively select a local .sav file from the app to view its last saved inventory quantities.
-6. Open Blueprint Manager; the latest save's session is already selected automatically. Import local files or browse/download blueprints.
-
-Run **npm test** to execute the automated tests. Run **npm run build:win** to generate an unsigned Windows portable executable in dist.
-
-## Blueprint installation
-
-Windows Satisfactory blueprint directory:
+Windows blueprint directory:
 
     %LOCALAPPDATA%\FactoryGame\Saved\SaveGames\blueprints\<SESSION NAME>
 
-Blueprints use .sbp and optionally .sbpcfg. The app only writes those two extensions from files and archives into the selected session directory, limits file sizes, sanitizes filenames, and does not overwrite existing .sbp files. If a filename conflicts, it appends a number. After importing, **reload the Satisfactory save** so the blueprints appear in the build menu.
+Existing SBP files are never overwritten; conflicting filenames receive numbered suffixes. Reload the game save after installing blueprints. Satisfactory Calculator's download formats may change, so manual import remains as a fallback.
 
-## Interpreting the dashboard
+## Run and build
 
-Live storage totals come from FRM getWorldInv, which includes storage-building inventories but not factory machinery, belts, pipes or player inventories. Cloud counts come from FRM getCloudInv. This distinction is important: **total = stored + cloud**. Current production and consumption come from FRM getProdStats when available; otherwise the app aggregates getFactory machine telemetry.
+Requires Windows and Node.js 20+ to run from source.
 
-Offline save parsing reads the inventory components present in the binary save, including some inventory types not counted by getWorldInv. Its totals may therefore differ from live storage figures. **A save snapshot has no reliable live items/minute measurement**, so those fields display as unavailable. Rates are throughput and must not be interpreted as guaranteed storage growth. Some newer or modded saves may need parser changes.
+1. Clone the repository.
+2. Run npm install.
+3. Run npm start.
+4. Launch Satisfactory with Ficsit Remote Monitoring enabled to see live data. The app connects automatically.
 
-The map and blueprint catalog remain services provided by Satisfactory Calculator; their remote data is not copied or scraped. This app does not automatically upload a save to Satisfactory Calculator, nor guarantee external site compatibility with Electron. Use the default browser option if needed.
+Run npm test for automated checks, or npm run build:win for an unsigned portable Windows EXE. GitHub Actions produces a Windows executable artifact after successful tests and packaging.
 
-## Source organization
+## Accuracy and limitations
 
-- src/main.js — Electron main process and bounded IPC
-- src/preload.js — narrow renderer bridge
-- src/telemetry.js — local FRM API
-- src/saves.js — read-only save discovery and parsing
-- src/inventory.js — inventory and throughput normalization
-- src/blueprints.js — session paths and safe installer
-- src/ui — desktop interface
-- test — Node test runner checks
+FRM getWorldInv includes storage buildings but excludes belts, pipes, player pockets and factory machine input inventories. Dimensional Depot items are reported separately by getCloudInv. Current production/consumption come from getProdStats when available or getFactory when supported; unavailable fields show a dash. Net production is not necessarily identical to changes in physical storage.
 
-## Roadmap
+The application contacts local telemetry at 127.0.0.1 and does not upload local saves to Satisfactory Calculator. Each embedded site remains a third-party website with its own privacy practices, isolated from Node.js. This is an initial build that still needs end-to-end testing with real Satisfactory sessions and the live website.
 
-Testing with actual Satisfactory 1.2 saves and the live game is still needed. Future work could add dedicated server hosts, machine drilldowns, historical graphs, custom session directories, more detailed item icons, Linux support, native map layers where licensed, and expanded blueprint catalogs.
-
-## Security and credits
-
-Save parsing is read-only. Telemetry requests are restricted to 127.0.0.1; third-party webpages run in sandboxed windows without Node access. Downloaded blueprints should still be treated as untrusted data and obtained from sources you trust. Swiss Army Knife requires no account and does not upload saves itself.
-
-This is an unofficial community project, not endorsed by Coffee Stain Studios, Satisfactory Calculator, FRM or the Satisfactory File Parser maintainers. All respective trademarks and assets belong to their owners.
-
-MIT License.
+Satisfactory belongs to Coffee Stain Studios; Satisfactory Calculator and FRM are independent community projects. No endorsement or affiliation is claimed. MIT License; dependencies retain their own licenses.

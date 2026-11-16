@@ -14,7 +14,10 @@ const {makeIconLoader}=require('./icons');
 
 const SITES = Object.freeze({
   map:'https://satisfactory-calculator.com/en/interactive-map',
-  blueprints:'https://satisfactory-calculator.com/en/blueprints'
+  blueprints:'https://satisfactory-calculator.com/en/blueprints',
+  production:'https://satisfactory-calculator.com/en/planners/production',
+  power:'https://satisfactory-calculator.com/en/planners/power',
+  mod:'https://docs.ficsit.app/ficsitremotemonitoring/latest/index.html'
 });
 let mainWindow;
 let blueprintBrowser;
