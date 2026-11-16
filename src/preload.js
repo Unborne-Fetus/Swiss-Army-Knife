@@ -5,6 +5,14 @@ contextBridge.exposeInMainWorld('sak',{
   settings:()=>ipcRenderer.invoke('settings:get'),
   autoScan:()=>ipcRenderer.invoke('auto:scan'),
   catalogOpen:()=>ipcRenderer.invoke('catalog:open'),
+  toolShow:(name,rect)=>ipcRenderer.invoke('tools:show',name,rect),
+  toolReload:name=>ipcRenderer.invoke('tools:reload',name),
+  getItemIcon:className=>ipcRenderer.invoke('icons:get',className),
+  onToolStatus:callback=>{
+    const fn=(_event,value)=>callback(value);
+    ipcRenderer.on('tools:status',fn);
+    return ()=>ipcRenderer.removeListener('tools:status',fn);
+  },
   catalogShow:(show,rect)=>ipcRenderer.invoke('catalog:show',show,rect),
   catalogBack:()=>ipcRenderer.invoke('catalog:back'),
   catalogHome:()=>ipcRenderer.invoke('catalog:home'),

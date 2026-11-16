@@ -9,36 +9,87 @@
   <div class="side-label">WORKSPACE</div>
   <nav><button class="nav active" data-tab="dashboard"><span>▦</span> Factory dashboard</button>
   <button class="nav" data-tab="map"><span>◎</span> Interactive map</button>
-  <button class="nav" data-tab="blueprints"><span>▤</span> Blueprint manager</button></nav>
-  <div class="sidebar-bottom"><div class="small-status"><span class="status-dot" id="connectionDot"></span><span id="connectionText">Not connected</span></div>
+  <button class="nav" data-tab="production"><span>⚙</span> Production planner</button>
+  <button class="nav" data-tab="power"><span>ϟ</span> Power planner</button>
+  <button class="nav" data-tab="blueprints"><span>▤</span> Blueprint manager</button>
+  <button class="nav" data-tab="settings"><span>⋯</span> Settings</button></nav>
+  <div class="sidebar-bottom"><div class="small-status"><span class="status-dot" id="connectionDot"></span><span id="connectionText">Connecting to Satisfactory…</span></div>
   <p>Unofficial community companion. No game files are modified by the dashboard.</p><small>VERSION 0.1.0 · WINDOWS</small></div>
 </aside>
 <main class="main">
 <header class="topbar"><div class="crumb">SATISFACTORY <span>/</span> <strong id="crumb">FACTORY DASHBOARD</strong></div><span class="tag">EARLY ACCESS</span></header>
 <section class="view current" id="tab-dashboard">
-  <div class="heading"><div><p class="eyebrow">FACTORY INTELLIGENCE</p><h1>Your entire factory,<br><em>at a glance.</em></h1><p class="lead">Inspect your save or monitor live production using Ficsit Remote Monitoring.</p></div><div class="heading-graphic"><div class="ring ring-one"></div><div class="ring ring-two"></div><div class="ring-core">S</div></div></div>
-  <div class="panel connection">
-    <div class="fieldgrow"><label for="port">LIVE TELEMETRY · LOCAL PORT</label><div class="inline"><span class="muted fixed">127.0.0.1 :</span><input type="number" id="port" min="1" max="65535" value="8080"><button id="connectBtn" class="primary">Connect live</button></div></div>
-    <div class="vline"></div>
-    <div class="fieldgrow"><label for="saveSelect">OFFLINE SAVE FILE</label><div class="inline"><select id="saveSelect" aria-label="Select game save"><option value="">Searching local saves…</option></select><button id="loadSaveBtn" class="secondary">Load</button><button id="chooseSaveBtn" class="iconbtn" title="Browse for a save file">…</button></div></div>
+  <div class="heading"><div><p class="eyebrow">LIVE FACTORY INTELLIGENCE</p>
+    <h1>Your entire factory,<br><em>at a glance.</em></h1>
+    <p class="lead">Live inventory, production and consumption — automatically synchronized while Satisfactory is running.</p>
+  </div><div class="heading-graphic"><div class="ring ring-one"></div><div class="ring ring-two"></div><div class="ring-core">S</div></div></div>
+  <div class="panel live-bar">
+    <div class="live-symbol"><span class="status-dot" id="liveDot"></span></div>
+    <div class="live-desc"><strong id="liveTitle">Looking for your factory…</strong>
+      <p id="liveMessage">Detecting Ficsit Remote Monitoring on this PC. Live connection will retry automatically.</p></div>
+    <button class="secondary" id="refreshBtn">↻ Sync now</button>
   </div>
-  <div class="snapshot-heading"><div><h2 id="snapshotTitle">Factory overview</h2><p id="snapshotSubtitle">Connect to your game or load a save to begin.</p></div><button class="secondary" id="refreshBtn">↻ Refresh</button></div>
+  <div class="snapshot-heading"><div><h2 id="snapshotTitle">Live factory overview</h2>
+    <p id="snapshotSubtitle">Connecting to local game telemetry…</p></div>
+    <span class="sync-tag" id="syncTag">AUTO-SYNC · 10 SEC</span></div>
   <div class="metric-grid">
     <div class="metric"><p>ITEM TYPES</p><strong id="metricTypes">—</strong><small>Tracked materials</small></div>
-    <div class="metric"><p>ITEMS HELD</p><strong id="metricItems">—</strong><small>Storage + dimensional depot / snapshot inventory</small></div>
-    <div class="metric"><p>PRODUCTION / MIN</p><strong id="metricProd">—</strong><small>Reported active output</small></div>
-    <div class="metric"><p>CONSUMPTION / MIN</p><strong id="metricCons">—</strong><small>Reported active input</small></div>
+    <div class="metric"><p>ITEMS HELD</p><strong id="metricItems">—</strong><small>Storage and dimensional depot</small></div>
+    <div class="metric"><p>PRODUCTION / MIN</p><strong id="metricProd">—</strong><small>Current output</small></div>
+    <div class="metric"><p>CONSUMPTION / MIN</p><strong id="metricCons">—</strong><small>Current input</small></div>
   </div>
-  <div class="panel table-panel"><div class="table-top"><div><h2>Material breakdown</h2><p>Quantities and per-minute production, consumption and net throughput.</p></div><input id="itemSearch" class="search" placeholder="Search materials…" aria-label="Search materials"></div>
-    <div class="table-scroll"><table><thead><tr><th>ITEM</th><th class="numeric">STORED</th><th class="numeric">CLOUD</th><th class="numeric">TOTAL</th><th class="numeric">PROD / MIN</th><th class="numeric">CONS / MIN</th><th class="numeric">NET / MIN</th></tr></thead>
-    <tbody id="itemRows"><tr><td colspan="7" class="empty">No game data yet. Open a save or connect to live telemetry.</td></tr></tbody></table></div>
-  </div><p class="footer-note" id="sourceNote">Live storage counts exclude belts, pipes and machine inventories. Offline saves may use broader inventory component counts.</p>
+  <div class="panel table-panel">
+    <div class="table-top"><div><h2>Item inventory &amp; throughput</h2>
+      <p>Click any column heading to sort. Click again to reverse the order.</p></div>
+      <input id="itemSearch" class="search" placeholder="Search items…" aria-label="Search items"></div>
+    <div class="table-scroll">
+      <table><thead><tr>
+        <th aria-sort="ascending"><button class="sort-head active" data-sort="name">ITEM <span class="sort-arrow">↑</span></button></th>
+        <th class="numeric"><button class="sort-head" data-sort="stored">STORED <span class="sort-arrow"></span></button></th>
+        <th class="numeric"><button class="sort-head" data-sort="cloud">CLOUD <span class="sort-arrow"></span></button></th>
+        <th class="numeric"><button class="sort-head" data-sort="total">TOTAL <span class="sort-arrow"></span></button></th>
+        <th class="numeric"><button class="sort-head" data-sort="produced">PROD / MIN <span class="sort-arrow"></span></button></th>
+        <th class="numeric"><button class="sort-head" data-sort="consumed">CONS / MIN <span class="sort-arrow"></span></button></th>
+        <th class="numeric"><button class="sort-head" data-sort="net">NET / MIN <span class="sort-arrow"></span></button></th>
+      </tr></thead>
+      <tbody id="itemRows"><tr><td colspan="7" class="empty">Connecting to live Satisfactory telemetry…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  <p class="footer-note" id="sourceNote">Live totals reflect reported storage and dimensional depot. Machine inventories and belts are separate.</p>
 </section>
 <section class="view" id="tab-map">
-  <div class="heading short"><div><p class="eyebrow">EXPLORE THE WORLD</p><h1>Interactive <em>map.</em></h1><p class="lead">Use Satisfactory Calculator's map to explore nodes, buildings and save data.</p></div></div>
-  <div class="feature-panel map-feature"><div class="map-orbit">⌖</div><span class="pill">SATISFACTORY CALCULATOR</span><h2>The world, mapped.</h2><p>Launch the original interactive map in its own browser window. Upload your save there for world objects and map analysis. Swiss Army Knife does not copy or scrape map assets.</p>
-    <div class="actions"><button class="primary" id="openMapBtn">Open interactive map</button><button class="secondary" id="mapExternalBtn">Open in default browser ↗</button></div></div>
-  <div class="info-line"><span>ⓘ</span> Map and save editing are supplied directly by Satisfactory Calculator. This release does not transfer local save data to the website automatically.</div>
+  <div class="heading short"><div><p class="eyebrow">SATISFACTORY CALCULATOR</p>
+    <h1>Interactive <em>map.</em></h1>
+    <p class="lead">Explore resource nodes and your factory on the map right here. No separate map window required.</p></div></div>
+  <div class="workspace-panel panel">
+    <div class="workspace-toolbar"><strong>INTERACTIVE MAP</strong>
+      <div class="actions"><button class="secondary" data-reload-tool="map">↻ Reload</button>
+        <button class="secondary" data-external-tool="map">Open in browser ↗</button></div></div>
+    <div class="tool-viewport" id="toolView-map">Loading Satisfactory Calculator map…</div>
+  </div><p class="footer-note">Map content is served by Satisfactory Calculator. Save uploads to that website remain your choice.</p>
+</section>
+<section class="view" id="tab-production">
+  <div class="heading short"><div><p class="eyebrow">SATISFACTORY CALCULATOR</p>
+    <h1>Production <em>planner.</em></h1>
+    <p class="lead">Plan complete production chains, alternate recipes, resource requirements, and building counts.</p></div></div>
+  <div class="workspace-panel panel">
+    <div class="workspace-toolbar"><strong>PRODUCTION PLANNER</strong>
+      <div class="actions"><button class="secondary" data-reload-tool="production">↻ Reload</button>
+        <button class="secondary" data-external-tool="production">Open in browser ↗</button></div></div>
+    <div class="tool-viewport" id="toolView-production">Loading production planner…</div>
+  </div>
+</section>
+<section class="view" id="tab-power">
+  <div class="heading short"><div><p class="eyebrow">SATISFACTORY CALCULATOR</p>
+    <h1>Power <em>planner.</em></h1>
+    <p class="lead">Calculate generator counts, fuel consumption and required power-shard settings.</p></div></div>
+  <div class="workspace-panel panel">
+    <div class="workspace-toolbar"><strong>POWER PLANNER</strong>
+      <div class="actions"><button class="secondary" data-reload-tool="power">↻ Reload</button>
+        <button class="secondary" data-external-tool="power">Open in browser ↗</button></div></div>
+    <div class="tool-viewport" id="toolView-power">Loading power planner…</div>
+  </div>
 </section>
 <section class="view" id="tab-blueprints">
   <div class="heading short"><div><p class="eyebrow">BUILD FASTER</p><h1>Blueprint <em>manager.</em></h1><p class="lead">Browse community builds, then install blueprints directly to your game session.</p></div></div>
@@ -51,5 +102,17 @@
   <div class="panel installed-panel"><div class="panel-header"><div><h2>Installed blueprints</h2><p id="currentSession">No session selected</p></div><button class="secondary" id="openFolderBtn">Open folder ↗</button></div>
   <div id="installedList" class="installed-list"><div class="empty">Choose a session to see installed blueprints.</div></div></div>
   <p class="footer-note">Reload your Satisfactory save to see newly installed blueprints. Existing files are not overwritten; conflicting names receive a numbered suffix.</p>
-</section><div class="toast" id="toast" role="status" aria-live="polite"></div>
-</main></div><script src="./app.js" defer></script></body></html>
+</section>
+<section class="view" id="tab-settings">
+  <div class="heading short"><div><p class="eyebrow">CONNECTION OPTIONS</p><h1>Advanced <em>settings.</em></h1>
+    <p class="lead">Swiss Army Knife connects automatically using the Ficsit Remote Monitoring mod. The default is port 8080.</p></div></div>
+  <div class="panel settings-panel">
+    <label for="monitorPort">LOCAL MONITORING PORT</label>
+    <div class="inline"><span class="muted fixed">127.0.0.1 :</span><input type="number" min="1" max="65535" id="monitorPort" value="8080">
+      <button class="primary" id="savePortBtn">Save and reconnect</button></div>
+    <p id="settingsStatus">To see live game data, install and enable Ficsit Remote Monitoring using Satisfactory Mod Manager.</p>
+    <button class="secondary" id="openModInfo">Monitoring mod documentation ↗</button>
+  </div>
+</section>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+</main></div><script src="./sort.js" defer></script><script src="./app.js" defer></script></body></html>

@@ -1,189 +1,304 @@
 'use strict';
+
 const el=id=>document.getElementById(id);
-const state={tab:'dashboard',mode:'none',port:8080,snapshot:null,session:'',busy:false,lastSave:'',offlineSnapshot:null,scanning:false};
+const state={
+  tab:'dashboard',port:8080,session:'',mode:'connecting',
+  snapshot:null,sortField:'name',sortDirection:'asc',
+  busy:false,scanning:false,catalogLoaded:false,
+  catalogPage:{isDetail:false,canGoBack:false}
+};
+const TOOL_TABS=new Set(['map','production','power']);
 const fmt=new Intl.NumberFormat('en-US',{maximumFractionDigits:1});
-const amount=n=>n===null || n===undefined?'—':fmt.format(n);
-const signed=n=>n===null || n===undefined?'—':(n>0?'+':'')+fmt.format(n);
-function toast(message,isError=false){
-  const box=el('toast');box.textContent=message;box.classList.toggle('error',isError);
-  box.classList.add('visible');clearTimeout(toast.timer);
-  toast.timer=setTimeout(()=>box.classList.remove('visible'),6500);
+const num=value=>value==null?'—':fmt.format(value);
+const signed=value=>value==null?'—':(value>0?'+':'')+fmt.format(value);
+const icons=new Map();
+let toastTimer;
+
+function toast(message,error=false){
+  const node=el('toast');
+  node.textContent=String(message||'Unknown error');
+  node.classList.toggle('error',error);
+  node.classList.add('visible');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>node.classList.remove('visible'),6000);
 }
-async function action(fn){try{await fn();}catch(error){toast(error.message||String(error),true);}}
-let catalogLoaded=false;
-function catalogRect(){const r=el('catalogView').getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height};}
-async function syncCatalog(){const active=state.tab==='blueprints';await window.sak.catalogShow(active,active?catalogRect():null);if(active&&!catalogLoaded){await window.sak.catalogOpen();catalogLoaded=true;}}
-function switchTab(tab){
-  state.tab=tab;for(const button of document.querySelectorAll('[data-tab]'))
-    button.classList.toggle('active',button.dataset.tab===tab);
-  for(const view of document.querySelectorAll('.view'))
-    view.classList.toggle('current',view.id==='tab-'+tab);
-  el('crumb').textContent=tab==='dashboard'?'FACTORY DASHBOARD':tab==='map'?'INTERACTIVE MAP':'BLUEPRINT MANAGER';
-  syncCatalog().catch(error=>toast(error.message,true));
+async function action(fn){
+  try{await fn();}catch(error){toast(error.message||String(error),true);}
 }
-function setOnline(mode){
-  state.mode=mode;el('connectionDot').classList.toggle('online',mode==='live');
-  el('connectionText').textContent=mode==='live'?'Live monitoring connected':mode==='save'?'Offline save loaded':'Not connected';
-  el('connectBtn').textContent=mode==='live'?'Reconnect live':'Connect live';
+function setConnection(status,message){
+  state.mode=status;
+  const connected=status==='live';
+  el('connectionDot').classList.toggle('online',connected);
+  el('liveDot').classList.toggle('online',connected);
+  el('connectionText').textContent=connected?'Live factory connected':'Waiting for live game';
+  el('liveTitle').textContent=connected?'Connected to Satisfactory':'Reconnecting automatically';
+  el('liveMessage').textContent=message||'Start Satisfactory with Ficsit Remote Monitoring enabled.';
+  el('settingsStatus').textContent=connected?
+    'Live monitoring connected on port '+state.port+'.':
+    'Live monitoring unavailable. Install/enable FRM and start the game. Auto-retry is active.';
 }
-function makeCell(text,className=''){
-  const td=document.createElement('td');td.className=className;td.textContent=text;return td;
+function setMetrics(items,available){
+  const sum=key=>items.reduce((total,item)=>total+(Number(item[key])||0),0);
+  el('metricTypes').textContent=available?num(items.length):'—';
+  el('metricItems').textContent=available?num(sum('total')):'—';
+  const rates=available&&state.snapshot&&state.snapshot.rateSource!=='unavailable';
+  el('metricProd').textContent=rates?num(sum('produced')):'—';
+  el('metricCons').textContent=rates?num(sum('consumed')):'—';
+}
+function makeCell(value,klass=''){
+  const td=document.createElement('td');td.className=klass;td.textContent=value;return td;
+}
+function showIcon(slot,source){
+  if(!source)return;
+  const img=document.createElement('img');
+  img.src=source;img.alt='';img.width=30;img.height=30;
+  img.decoding='async';img.loading='lazy';
+  slot.replaceChildren(img);
+}
+function requestIcon(item,slot){
+  const id=item.id;
+  slot.dataset.iconId=id;
+  slot.textContent=(item.name||'?').slice(0,1).toUpperCase();
+  const cached=icons.get(id);
+  if(cached&&cached.data){showIcon(slot,cached.data);return;}
+  if(cached&&(cached.loading||Date.now()<cached.retryAt))return;
+  const record={loading:true,data:null,retryAt:0};
+  icons.set(id,record);
+  window.sak.getItemIcon(id).then(data=>{
+    record.data=data||null;
+    record.retryAt=data?Number.MAX_SAFE_INTEGER:Date.now()+45000;
+    record.loading=false;
+    if(!data)return;
+    for(const box of document.querySelectorAll('[data-icon-id]')){
+      if(box.dataset.iconId===id)showIcon(box,data);
+    }
+  }).catch(()=>{
+    record.loading=false;record.retryAt=Date.now()+45000;
+  });
 }
 function renderTable(){
-  const body=el('itemRows');body.replaceChildren();
-  const items=(state.snapshot&&state.snapshot.items)||[];
-  const search=el('itemSearch').value.toLowerCase().trim();
-  const filtered=items.filter(i=>i.name.toLowerCase().includes(search)||i.id.toLowerCase().includes(search));
-  if(!filtered.length){
-    const tr=document.createElement('tr'),td=makeCell(items.length?'No matching materials.':'No materials detected.','empty');
-    td.colSpan=7;tr.append(td);body.append(tr);return;
+  const tbody=el('itemRows');tbody.replaceChildren();
+  const query=el('itemSearch').value.trim().toLowerCase();
+  const all=state.snapshot?.items||[];
+  const sorted=window.SAKSort.sortItems(
+    all.filter(item=>item.name.toLowerCase().includes(query)||item.id.toLowerCase().includes(query)),
+    state.sortField,state.sortDirection
+  );
+  if(!sorted.length){
+    const tr=document.createElement('tr');
+    const td=makeCell(all.length?'No matching items.':
+      state.snapshot?'No inventory items are reported yet.':'Waiting for live inventory data…','empty');
+    td.colSpan=7;tr.append(td);tbody.append(tr);
+    return;
   }
-  for(const item of filtered){
-    const row=document.createElement('tr');
-    row.append(makeCell(item.name,'item-name'),makeCell(amount(item.stored),'numeric'),
-      makeCell(state.mode==='live'?amount(item.cloud):'—','numeric'),
-      makeCell(amount(item.total),'numeric accent'),makeCell(amount(item.produced),'numeric'),
-      makeCell(amount(item.consumed),'numeric'),makeCell(signed(item.net),'numeric '+(item.net>0?'positive':item.net<0?'negative':'')));
-    body.append(row);
+  for(const item of sorted){
+    const tr=document.createElement('tr');
+    const name=document.createElement('td');name.className='item-name';
+    const line=document.createElement('div');line.className='item-line';
+    const icon=document.createElement('span');icon.className='item-icon';
+    requestIcon(item,icon);
+    const details=document.createElement('span');details.className='item-details';
+    const title=document.createElement('strong');title.textContent=item.name;
+    const subtitle=document.createElement('small');subtitle.textContent=item.id;
+    details.append(title,subtitle);line.append(icon,details);name.append(line);
+    tr.append(name,
+      makeCell(num(item.stored),'numeric'),
+      makeCell(num(item.cloud),'numeric'),
+      makeCell(num(item.total),'numeric accent'),
+      makeCell(num(item.produced),'numeric'),
+      makeCell(num(item.consumed),'numeric'),
+      makeCell(signed(item.net),'numeric '+(item.net>0?'positive':item.net<0?'negative':'')));
+    tbody.append(tr);
   }
 }
-function renderSnapshot(snapshot){
-  state.snapshot=snapshot;setOnline(snapshot.mode);
-  const items=snapshot.items||[],hasRates=['production-stats','factory'].includes(snapshot.rateSource);
-  el('snapshotTitle').textContent=snapshot.mode==='live'?'Live factory overview':(snapshot.name||'Offline save')+' overview';
-  el('snapshotSubtitle').textContent=(snapshot.mode==='live'?'Live telemetry · ':'Save snapshot · ')+
-    new Date(snapshot.capturedAt).toLocaleString()+
-    (hasRates?' · Rates from '+(snapshot.rateSource==='factory'?'factory machines':'Production Stats'):
-    snapshot.rateSource==='save-delta'?' · Estimated inventory change/min from save history':' · Factory throughput unavailable');
-  el('metricTypes').textContent=amount(items.length);
-  el('metricItems').textContent=amount(items.reduce((v,i)=>v+i.total,0));
-  el('metricProd').textContent=hasRates?amount(items.reduce((v,i)=>v+(i.produced||0),0)):'—';
-  el('metricCons').textContent=hasRates?amount(items.reduce((v,i)=>v+(i.consumed||0),0)):'—';
+function updateSortHeading(){
+  for(const button of document.querySelectorAll('[data-sort]')){
+    const active=button.dataset.sort===state.sortField;
+    button.classList.toggle('active',active);
+    button.querySelector('.sort-arrow').textContent=active?(state.sortDirection==='asc'?'↑':'↓'):'';
+    button.closest('th').setAttribute('aria-sort',active?
+      (state.sortDirection==='asc'?'ascending':'descending'):'none');
+  }
+}
+function selectSort(field){
+  if(field===state.sortField){
+    state.sortDirection=state.sortDirection==='asc'?'desc':'asc';
+  }else{
+    state.sortField=field;
+    state.sortDirection=field==='name'?'asc':'desc';
+  }
+  updateSortHeading();renderTable();
+}
+function renderLive(snapshot){
+  state.snapshot=snapshot;
+  setConnection('live','Real-time telemetry · Updated '+new Date(snapshot.capturedAt).toLocaleTimeString());
+  el('snapshotTitle').textContent='Live factory overview';
+  el('snapshotSubtitle').textContent='Last sync: '+new Date(snapshot.capturedAt).toLocaleString()+
+    (snapshot.rateSource==='unavailable'?' · Production-rate integration unavailable':' · Production rates available');
+  el('syncTag').textContent='LIVE · REFRESH 10 SEC';
   el('sourceNote').textContent=(snapshot.warnings||[]).join(' ')||
-    'Live storage totals exclude belts, pipes and factory input inventories. Rates are separate measures of throughput.';
-  renderTable();
-}
-async function refreshSaves(){
-  const files=await window.sak.saves(),select=el('saveSelect');select.replaceChildren();
-  if(!files.length)select.add(new Option('No local saves found — browse manually',''));
-  else for(const f of files)select.add(new Option(f.name+' · '+new Date(f.modifiedAt).toLocaleDateString(),f.path));
-  if(state.lastSave&&files.some(f=>f.path===state.lastSave))select.value=state.lastSave;
-  return files;
-}
-async function loadSelectedSave(){
-  const file=el('saveSelect').value;
-  if(!file){toast('Choose a save or use the browse button.',true);return;}
-  const snapshot=await window.sak.loadSave(file);state.lastSave=file;
-  renderSnapshot(snapshot);toast('Loaded '+snapshot.name);
+    'Totals are storage and dimensional depot counts; production/consumption are the reported per-minute machine rates.';
+  setMetrics(snapshot.items||[],true);renderTable();
 }
 async function readLive(silent=false){
   if(state.busy)return;
   state.busy=true;
   try{
-    const port=Number(el('port').value),snapshot=await window.sak.live(port);
-    state.port=port;await window.sak.savePort(port);renderSnapshot(snapshot);
-    if(!silent)toast('Connected to local factory telemetry.');
+    const snapshot=await window.sak.live(state.port);
+    renderLive(snapshot);
+    if(!silent)toast('Factory data synchronized.');
   }catch(error){
-    if(!silent)toast(error.message,true);
-    if(state.mode==='live'){
-      if(state.offlineSnapshot)renderSnapshot(state.offlineSnapshot);
-      else setOnline('none');
-    }
+    const last=state.snapshot;
+    setConnection('offline','Satisfactory or FRM is not reachable on localhost:'+state.port+
+      '. Checking again automatically every 10 seconds.');
+    el('snapshotSubtitle').textContent=last?
+      'Connection interrupted · Displayed figures are from the last successful sync.':
+      'Start the game with Ficsit Remote Monitoring for live data.';
+    el('syncTag').textContent='RECONNECTING';
+    if(!silent)toast(error.message||'Cannot connect to game',true);
   }finally{state.busy=false;}
 }
-async function refreshCurrent(){
-  if(state.mode==='live')return readLive();
-  if(state.mode==='save'&&state.lastSave){
-    const snapshot=await window.sak.loadSave(state.lastSave);return renderSnapshot(snapshot);
-  }
-  return refreshSaves();
-}
-async function scanAutomatically() {
+async function scanAutomatically(){
   if(state.scanning)return;
   state.scanning=true;
-  try {
+  try{
     const result=await window.sak.autoScan();
-    if(result.selectedSession!==state.session) {
-      state.session=result.selectedSession||'';
-      el('currentSession').textContent=state.session?
-        'Session: '+state.session+(result.manualSession?' · Manual override':' · Auto-detected'):'No session detected';
+    const was=state.session;
+    state.session=result.selectedSession||'';
+    if(was!==state.session){
+      el('currentSession').textContent=state.session?'Session: '+state.session:'No session detected';
       await refreshSessions();
       if(state.session)await updateInstalled();
+      refreshCatalogInstallButton();
     }
     el('autoSessionHint').textContent=result.latest?
-      'Detected from your latest save: '+result.latest.name+' · Session: '+result.latest.session:
-      'No save found yet. Start or save a Satisfactory session to detect it automatically.';
-    if(result.snapshot) {
-      state.offlineSnapshot=result.snapshot;
-      state.lastSave=result.latest.path;
-      if(state.mode!=='live')renderSnapshot(result.snapshot);
-    }
-    if(result.error && !state.snapshot)toast(result.error,true);
-  } finally {state.scanning=false;}
+      'Automatically detected game session: '+result.latest.session:
+      'No game session detected yet. Save your world to enable automatic blueprint installation.';
+  }finally{state.scanning=false;}
+}
+function rectFor(id){
+  const r=el(id).getBoundingClientRect();
+  return {x:r.x,y:r.y,width:r.width,height:r.height};
+}
+let embeddedTick=0;
+async function syncEmbedded(){
+  const tab=state.tab;
+  const call=++embeddedTick;
+  const isCatalog=tab==='blueprints';
+  await window.sak.catalogShow(isCatalog,isCatalog?rectFor('catalogView'):null);
+  if(call!==embeddedTick)return;
+  await window.sak.toolShow(TOOL_TABS.has(tab)?tab:null,
+    TOOL_TABS.has(tab)?rectFor('toolView-'+tab):null);
+  if(call!==embeddedTick)return;
+  if(isCatalog&&!state.catalogLoaded){
+    try{await window.sak.catalogOpen();state.catalogLoaded=true;}
+    catch(error){toast('Blueprint library unavailable: '+error.message,true);}
+  }
+}
+function switchTab(tab){
+  state.tab=tab;
+  for(const button of document.querySelectorAll('[data-tab]'))
+    button.classList.toggle('active',button.dataset.tab===tab);
+  for(const view of document.querySelectorAll('.view'))
+    view.classList.toggle('current',view.id==='tab-'+tab);
+  const names={dashboard:'FACTORY DASHBOARD',map:'INTERACTIVE MAP',production:'PRODUCTION PLANNER',
+    power:'POWER PLANNER',blueprints:'BLUEPRINT MANAGER',settings:'SETTINGS'};
+  el('crumb').textContent=names[tab]||'WORKSPACE';
+  syncEmbedded().catch(e=>toast(e.message,true));
 }
 async function refreshSessions(){
-  const sessions=await window.sak.sessions(),select=el('sessionSelect');select.replaceChildren();
+  const sessions=await window.sak.sessions();
+  const select=el('sessionSelect');select.replaceChildren();
   select.add(new Option('Choose a session…',''));
-  for(const name of sessions)select.add(new Option(name,name));
+  for(const session of sessions)select.add(new Option(session,session));
   if(state.session&&sessions.includes(state.session))select.value=state.session;
 }
 async function chooseSession(name){
-  if(!name)throw new Error('Enter or choose a session name.');
-  const data=await window.sak.selectSession(name);state.session=data.session;
-  el('currentSession').textContent='Session: '+state.session;el('newSession').value='';
-  await refreshSessions();renderInstalled(data.installed);
-  el('autoSessionHint').textContent='Manual override enabled. Use “Auto-detect” to follow your latest game save.';
-  toast('Target session set to '+state.session);
+  if(!name)throw Error('Enter or choose a session name.');
+  const result=await window.sak.selectSession(name);
+  state.session=result.session;
+  el('currentSession').textContent='Session: '+state.session+' · Manual override';
+  el('newSession').value='';
+  await refreshSessions();renderInstalled(result.installed);refreshCatalogInstallButton();
+  toast('Blueprint destination set to '+state.session);
 }
 function renderInstalled(files){
-  const target=el('installedList');target.replaceChildren();
+  const box=el('installedList');box.replaceChildren();
   if(!files.length){
-    const empty=document.createElement('div');empty.className='empty';
-    empty.textContent='No blueprints installed in this session.';target.append(empty);return;
+    const div=document.createElement('div');div.className='empty';
+    div.textContent='No blueprints installed in this session.';box.append(div);return;
   }
   for(const file of files){
     const row=document.createElement('div');row.className='installed-row';
     const icon=document.createElement('span');icon.className='blueprint-icon';icon.textContent='▤';
-    const text=document.createElement('span');text.textContent=file;row.append(icon,text);target.append(row);
+    const name=document.createElement('span');name.textContent=file;
+    row.append(icon,name);box.append(row);
   }
 }
-async function updateInstalled(){if(state.session)renderInstalled(await window.sak.installed());}
+async function updateInstalled(){
+  if(state.session)renderInstalled(await window.sak.installed());
+}
+function refreshCatalogInstallButton(){
+  el('catalogInstall').disabled=!state.catalogPage.isDetail||!state.session;
+}
 document.querySelectorAll('[data-tab]').forEach(button=>
   button.addEventListener('click',()=>switchTab(button.dataset.tab)));
-el('connectBtn').addEventListener('click',()=>action(()=>readLive()));
-el('loadSaveBtn').addEventListener('click',()=>action(loadSelectedSave));
-el('chooseSaveBtn').addEventListener('click',()=>action(async()=>{
-  const snapshot=await window.sak.chooseSave();
-  if(snapshot){state.lastSave='';renderSnapshot(snapshot);toast('Loaded '+snapshot.name);}
-}));
-el('refreshBtn').addEventListener('click',()=>action(refreshCurrent));
+document.querySelectorAll('[data-sort]').forEach(button=>
+  button.addEventListener('click',()=>selectSort(button.dataset.sort)));
+el('refreshBtn').addEventListener('click',()=>action(()=>readLive(false)));
 el('itemSearch').addEventListener('input',renderTable);
-el('openMapBtn').addEventListener('click',()=>action(()=>window.sak.openSite('map')));
-el('mapExternalBtn').addEventListener('click',()=>action(()=>window.sak.openSiteExternally('map')));
+el('savePortBtn').addEventListener('click',()=>action(async()=>{
+  const port=Number(el('monitorPort').value);
+  await window.sak.savePort(port);state.port=port;
+  await readLive(false);
+  toast('Connection port saved: '+port);
+}));
+el('openModInfo').addEventListener('click',()=>action(()=>window.sak.openSiteExternally('mod')));
+for(const button of document.querySelectorAll('[data-reload-tool]')){
+  button.addEventListener('click',()=>action(()=>window.sak.toolReload(button.dataset.reloadTool)));
+}
+for(const button of document.querySelectorAll('[data-external-tool]')){
+  button.addEventListener('click',()=>action(()=>window.sak.openSiteExternally(button.dataset.externalTool)));
+}
 el('catalogBack').addEventListener('click',()=>action(()=>window.sak.catalogBack()));
 el('catalogHome').addEventListener('click',()=>action(()=>window.sak.catalogHome()));
-el('catalogInstall').addEventListener('click',()=>action(async()=>{await window.sak.catalogInstall();toast('Downloading both blueprint files to '+state.session); }));
-window.sak.onCatalogPage(page=>{el('catalogBack').disabled=!page.canGoBack;el('catalogInstall').disabled=!page.isDetail||!state.session;});
-window.addEventListener('resize',()=>{if(state.tab==='blueprints')syncCatalog().catch(()=>{});});
-window.addEventListener('scroll',()=>{if(state.tab==='blueprints')syncCatalog().catch(()=>{});},true);
+el('catalogInstall').addEventListener('click',()=>action(async()=>{
+  await window.sak.catalogInstall();
+  toast('Blueprint download started for '+state.session+'.');
+}));
+window.sak.onCatalogPage(page=>{state.catalogPage=page;el('catalogBack').disabled=!page.canGoBack;refreshCatalogInstallButton();});
+window.sak.onToolStatus(value=>{
+  const node=el('toolView-'+value.name);
+  if(!node)return;
+  if(value.kind==='error')toast(value.name+' cannot load inside the app: '+value.detail,true);
+});
+function syncPosition(){
+  if(state.tab==='blueprints'||TOOL_TABS.has(state.tab))
+    syncEmbedded().catch(()=>{});
+}
+window.addEventListener('resize',syncPosition);
+window.addEventListener('scroll',syncPosition,true);
 el('browseBlueprintsBtn').addEventListener('click',()=>action(async()=>{
-  if(!state.session)throw new Error('Choose a session first for one-click installation.');
+  if(!state.session)throw Error('No blueprint session found; start or save a game first.');
   await window.sak.openSite('blueprints');
 }));
 el('selectSessionBtn').addEventListener('click',()=>action(()=>chooseSession(el('sessionSelect').value)));
 el('autoSessionBtn').addEventListener('click',()=>action(async()=>{
-  await window.sak.useActiveSession();state.session='';await scanAutomatically();
+  const result=await window.sak.useActiveSession();
+  state.session=result.selectedSession||'';
+  await scanAutomatically();
   toast('Automatic session detection enabled.');
 }));
 el('createSessionBtn').addEventListener('click',()=>action(()=>chooseSession(el('newSession').value.trim())));
 el('importBlueprintsBtn').addEventListener('click',()=>action(async()=>{
-  if(!state.session)throw new Error('Choose a session first.');
+  if(!state.session)throw Error('Start or save Satisfactory to detect your blueprint session.');
   const result=await window.sak.importBlueprints();
-  if(result){await updateInstalled();toast('Installed '+result.installed.length+' blueprint file(s). Reload your game save.');}
+  if(result){await updateInstalled();toast('Installed '+result.installed.length+' blueprint file(s).');}
 }));
 el('openFolderBtn').addEventListener('click',()=>action(async()=>{
-  if(!state.session)throw new Error('Choose a session first.');
-  const message=await window.sak.openBlueprintFolder();if(message)throw new Error(message);
+  if(!state.session)throw Error('No blueprint session selected.');
+  const error=await window.sak.openBlueprintFolder();
+  if(error)throw Error(error);
 }));
 window.sak.onNotice(payload=>{
   toast(payload.message,payload.isError);
@@ -192,17 +307,11 @@ window.sak.onNotice(payload=>{
 async function initialize(){
   const settings=await window.sak.settings();
   state.port=settings.port||8080;state.session=settings.session||'';
-  el('port').value=state.port;
-  await Promise.all([refreshSessions(),refreshSaves()]);
-  if(state.session){
-    el('currentSession').textContent='Session: '+state.session;
-    await updateInstalled();
-  }
-  // No click, file picker, or folder setup: the newest save is opened automatically.
-  await scanAutomatically();
-  // Prefer actual game telemetry when the optional monitoring mod is available.
-  await readLive(true);
+  el('monitorPort').value=state.port;
+  if(state.session){el('currentSession').textContent='Session: '+state.session;await updateInstalled();}
+  await Promise.all([readLive(true),refreshSessions(),scanAutomatically()]);
 }
-setInterval(()=>{readLive(true).catch(()=>{});},10000);
-setInterval(()=>{scanAutomatically().catch(error=>toast(error.message,true));},15000);
+updateSortHeading();
 initialize().catch(error=>toast(error.message,true));
+setInterval(()=>{readLive(true).catch(()=>{});},10000);
+setInterval(()=>{scanAutomatically().catch(()=>{});},15000);

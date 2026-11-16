@@ -9,6 +9,8 @@ const {listSaves,loadSaveSnapshot} = require('./saves');
 const blueprints = require('./blueprints');
 const {AutoDiscovery} = require('./autodiscovery');
 const {catalog}=require('./catalog');
+const {createTools}=require('./embedded-tools');
+const {makeIconLoader}=require('./icons');
 
 const SITES = Object.freeze({
   map:'https://satisfactory-calculator.com/en/interactive-map',
@@ -17,9 +19,15 @@ const SITES = Object.freeze({
 let mainWindow;
 let blueprintBrowser;
 let integratedCatalog;
+let integratedTools;
+const iconLoader=makeIconLoader();
 let selectedSession='';
 let manualSession=false;
-const autodiscovery=new AutoDiscovery();
+// Save HEADER is used only for blueprint-session detection. Factory quantities
+// come solely from live telemetry, avoiding expensive background save parsing.
+const autodiscovery=new AutoDiscovery({load:async()=>({
+  mode:'save',items:[],warnings:[],rateSource:'unavailable'
+})});
 let port=8080;
 
 function notify(message,isError=false) {
@@ -51,6 +59,7 @@ function createMainWindow(){
   });
   mainWindow.loadFile(path.join(__dirname,'ui','index.html'));
   integratedCatalog=catalog(mainWindow,notify);
+  integratedTools=createTools(mainWindow,notify);
   mainWindow.once('ready-to-show',()=>mainWindow.show());
   mainWindow.webContents.setWindowOpenHandler(()=>({action:'deny'}));
   mainWindow.webContents.on('will-navigate',event=>event.preventDefault());
@@ -160,6 +169,9 @@ async function scanActiveSave() {
 }
 
 function handlers() {
+  ipcMain.handle('tools:show',(_event,name,rect)=>integratedTools.show(name,rect));
+  ipcMain.handle('tools:reload',(_event,name)=>integratedTools.reload(name));
+  ipcMain.handle('icons:get',(_event,className)=>iconLoader.get(port,className));
   ipcMain.handle('catalog:open',()=>integratedCatalog.open());
   ipcMain.handle('catalog:show',(_e,show,rect)=>{
     if(typeof show!=='boolean')throw Error('Bad visibility flag');
