@@ -10,12 +10,16 @@ function toast(message,isError=false){
   toast.timer=setTimeout(()=>box.classList.remove('visible'),6500);
 }
 async function action(fn){try{await fn();}catch(error){toast(error.message||String(error),true);}}
+let catalogLoaded=false;
+function catalogRect(){const r=el('catalogView').getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height};}
+async function syncCatalog(){const active=state.tab==='blueprints';await window.sak.catalogShow(active,active?catalogRect():null);if(active&&!catalogLoaded){await window.sak.catalogOpen();catalogLoaded=true;}}
 function switchTab(tab){
   state.tab=tab;for(const button of document.querySelectorAll('[data-tab]'))
     button.classList.toggle('active',button.dataset.tab===tab);
   for(const view of document.querySelectorAll('.view'))
     view.classList.toggle('current',view.id==='tab-'+tab);
   el('crumb').textContent=tab==='dashboard'?'FACTORY DASHBOARD':tab==='map'?'INTERACTIVE MAP':'BLUEPRINT MANAGER';
+  syncCatalog().catch(error=>toast(error.message,true));
 }
 function setOnline(mode){
   state.mode=mode;el('connectionDot').classList.toggle('online',mode==='live');
@@ -156,6 +160,12 @@ el('refreshBtn').addEventListener('click',()=>action(refreshCurrent));
 el('itemSearch').addEventListener('input',renderTable);
 el('openMapBtn').addEventListener('click',()=>action(()=>window.sak.openSite('map')));
 el('mapExternalBtn').addEventListener('click',()=>action(()=>window.sak.openSiteExternally('map')));
+el('catalogBack').addEventListener('click',()=>action(()=>window.sak.catalogBack()));
+el('catalogHome').addEventListener('click',()=>action(()=>window.sak.catalogHome()));
+el('catalogInstall').addEventListener('click',()=>action(async()=>{await window.sak.catalogInstall();toast('Downloading both blueprint files to '+state.session); }));
+window.sak.onCatalogPage(page=>{el('catalogBack').disabled=!page.canGoBack;el('catalogInstall').disabled=!page.isDetail||!state.session;});
+window.addEventListener('resize',()=>{if(state.tab==='blueprints')syncCatalog().catch(()=>{});});
+window.addEventListener('scroll',()=>{if(state.tab==='blueprints')syncCatalog().catch(()=>{});},true);
 el('browseBlueprintsBtn').addEventListener('click',()=>action(async()=>{
   if(!state.session)throw new Error('Choose a session first for one-click installation.');
   await window.sak.openSite('blueprints');

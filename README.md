@@ -17,6 +17,10 @@ When two successive snapshots from the same session are available, the dashboard
 - Autosave monitoring only works while Swiss Army Knife is running. Launch the app to begin auto-discovery.
 - Cloud-only saves, nonstandard folders, remote dedicated servers, and some modded save formats may need extra setup or support.
 
+## Integrated Satisfactory Calculator blueprint catalog
+
+Blueprint Manager includes the actual Satisfactory Calculator community catalog within an isolated browser view. Search and navigate on the website, open a blueprint detail page, then click **Install this blueprint** in the app to trigger its SBP and SBP Config downloads. Downloads are installed automatically into the current detected save session. The site is independent and requires internet access; it may change its markup or restrict downloads. Manual import remains available.
+
 ## Current features
 
 - Live factory monitor via the [Ficsit Remote Monitoring mod](https://ficsit.app/mod/FicsitRemoteMonitoring). The app queries its local HTTP API (default port 8080).

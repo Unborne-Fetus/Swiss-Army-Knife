@@ -8,6 +8,7 @@ const {getLiveSnapshot,validatePort} = require('./telemetry');
 const {listSaves,loadSaveSnapshot} = require('./saves');
 const blueprints = require('./blueprints');
 const {AutoDiscovery} = require('./autodiscovery');
+const {catalog}=require('./catalog');
 
 const SITES = Object.freeze({
   map:'https://satisfactory-calculator.com/en/interactive-map',
@@ -15,6 +16,7 @@ const SITES = Object.freeze({
 });
 let mainWindow;
 let blueprintBrowser;
+let integratedCatalog;
 let selectedSession='';
 let manualSession=false;
 const autodiscovery=new AutoDiscovery();
@@ -48,6 +50,7 @@ function createMainWindow(){
     }
   });
   mainWindow.loadFile(path.join(__dirname,'ui','index.html'));
+  integratedCatalog=catalog(mainWindow,notify);
   mainWindow.once('ready-to-show',()=>mainWindow.show());
   mainWindow.webContents.setWindowOpenHandler(()=>({action:'deny'}));
   mainWindow.webContents.on('will-navigate',event=>event.preventDefault());
@@ -108,7 +111,9 @@ function registerDownloads(){
   // Only downloads initiated by our separate blueprint browser are auto-installed.
   const {session}=require('electron');
   session.defaultSession.on('will-download',(event,item,contents)=>{
-    if(!blueprintBrowser || blueprintBrowser.isDestroyed() || contents.id !== blueprintBrowser.webContents.id) return;
+    const fromStandalone=blueprintBrowser&&!blueprintBrowser.isDestroyed()&&contents&&contents.id===blueprintBrowser.webContents.id;
+    const fromIntegrated=integratedCatalog&&contents&&contents.id===integratedCatalog.wc.id;
+    if(!fromStandalone&&!fromIntegrated)return;
     const ext=path.extname(item.getFilename()).toLowerCase();
     if(!['.sbp','.sbpcfg','.zip'].includes(ext)) return;
     handleDownload(item,contents).catch(error=>{
@@ -129,6 +134,25 @@ async function scanActiveSave() {
 }
 
 function handlers() {
+  ipcMain.handle('catalog:open',()=>integratedCatalog.open());
+  ipcMain.handle('catalog:show',(_e,show,rect)=>{
+    if(typeof show!=='boolean')throw Error('Bad visibility flag');
+    let bounds;
+    if(show){
+      const [w,h]=mainWindow.getContentSize();
+      if(!rect||!['x','y','width','height'].every(k=>Number.isFinite(rect[k])))throw Error('Invalid bounds');
+      const x=Math.max(0,Math.min(w-1,Math.floor(rect.x)));
+      const y=Math.max(0,Math.min(h-1,Math.floor(rect.y)));
+      bounds={x,y,width:Math.max(1,Math.min(w-x,Math.floor(rect.width))),height:Math.max(1,Math.min(h-y,Math.floor(rect.height)))};
+    }
+    integratedCatalog.show(show,bounds);
+  });
+  ipcMain.handle('catalog:back',()=>integratedCatalog.back());
+  ipcMain.handle('catalog:home',()=>integratedCatalog.home());
+  ipcMain.handle('catalog:install',()=>{
+    if(!selectedSession)throw Error('No save session detected. Save a game first.');
+    return integratedCatalog.install();
+  });
   ipcMain.handle('auto:scan',()=>scanActiveSave());
   ipcMain.handle('auto:use-active',async()=>{
     manualSession=false;
