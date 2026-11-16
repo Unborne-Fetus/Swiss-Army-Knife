@@ -1,0 +1,39 @@
+{
+  "name": "satisfactory-swiss-army-knife",
+  "version": "0.1.0",
+  "description": "Satisfactory factory companion, save viewer and blueprint manager",
+  "main": "src/main.js",
+  "license": "MIT",
+  "author": "Swiss Army Knife contributors",
+  "private": false,
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "build:win": "electron-builder --win portable --publish never"
+  },
+  "dependencies": {
+    "@etothepii/satisfactory-file-parser": "^4.1.2",
+    "adm-zip": "^0.5.16"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.swissarmyknife.satisfactory",
+    "productName": "Swiss Army Knife",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        "portable"
+      ]
+    },
+    "artifactName": "Swiss-Army-Knife-${version}-${arch}.${ext}"
+  }
+}
