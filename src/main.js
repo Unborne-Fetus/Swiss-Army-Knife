@@ -82,6 +82,8 @@ function openWebsite(which) {
   site.on('closed',()=>{if(blueprintBrowser===site) blueprintBrowser=undefined;});
   site.loadURL(SITES[which]).catch(error=>notify('Site could not load: '+error.message,true));
 }
+const pendingConfigs=new Map();
+const pendingExpiryMs=120000;
 async function handleDownload(item,source) {
   const targetSession=selectedSession;
   if(!targetSession) {
@@ -98,7 +100,31 @@ async function handleDownload(item,source) {
   item.once('done',async (_event,state)=>{
     try {
       if(state!=='completed') throw new Error('Download '+state);
-      const output=await blueprints.installBlueprints(targetSession,[tempFile]);
+      const base=blueprints.safeBase(filename).toLowerCase();
+      const key=targetSession.toLowerCase()+'|'+base;
+      if(ext==='.sbpcfg') {
+        const installed=await blueprints.listInstalled(targetSession);
+        if(!installed.some(f=>f.toLowerCase()===base+'.sbp')&&!pendingConfigs.has(key)){
+          const pending={temp,tempFile};
+          pendingConfigs.set(key,pending);
+          setTimeout(async()=>{
+            if(pendingConfigs.get(key)===pending){
+              pendingConfigs.delete(key);
+              await fs.rm(temp,{recursive:true,force:true}).catch(()=>{});
+              notify('Config downloaded for '+base+'; the matching SBP file was not downloaded.',true);
+            }
+          },pendingExpiryMs).unref();
+          notify('Blueprint config received. Finishing installation when the matching SBP downloads.');
+          return;
+        }
+      }
+      const extra=pendingConfigs.get(key);
+      const paths=ext==='.sbp'&&extra?[tempFile,extra.tempFile]:[tempFile];
+      const output=await blueprints.installBlueprints(targetSession,paths);
+      if(ext==='.sbp'&&extra){
+        pendingConfigs.delete(key);
+        await fs.rm(extra.temp,{recursive:true,force:true}).catch(()=>{});
+      }
       notify('Installed '+output.installed.join(', ')+' into '+output.session+'. Reload the save in-game to see it.');
     } catch(error) {
       notify('Blueprint installation failed: '+error.message,true);
