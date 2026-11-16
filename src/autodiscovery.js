@@ -72,7 +72,7 @@ class AutoDiscovery {
     }
     const same=this.latest && this.latest.path===chosen.path &&
       this.latest.modifiedAt===chosen.modifiedAt && this.latest.bytes===chosen.bytes;
-    if(same) return {latest:this.latest,snapshot:null,error:this.error,changed:false};
+    if(same) return {latest:chosen,snapshot:null,error:this.error,changed:false};
 
     // Saving may still be in progress; the next automatic scan retries.
     if(Date.now()-Date.parse(chosen.modifiedAt)<1500)

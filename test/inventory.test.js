@@ -31,3 +31,16 @@ test('does not fabricate rates for an offline save',()=>{
   assert.equal(got.items[0].net,null);
   assert.equal(got.components,1);
 });
+
+test('reads inventory from parser keyed levels (not only arrays)',()=>{
+  const save={levels:{Persistent_Level:{objects:[{
+    properties:{mInventoryStacks:{values:[{value:{properties:{
+      Item:{value:{itemReference:{pathName:'/Game/Factory/Desc_IronPlate.Desc_IronPlate_C'}}},
+      NumItems:{value:250}
+    }}}]}}
+  }]}}};
+  const parsed=extractSaveInventory(save);
+  assert.equal(parsed.components,1);
+  assert.equal(parsed.stacksRead,1);
+  assert.equal(parsed.items[0].total,250);
+});

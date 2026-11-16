@@ -2,6 +2,21 @@
 
 An unofficial **Windows desktop application** to inspect Satisfactory inventories and production, open the Satisfactory Calculator map and install community blueprints with a click.
 
+## Zero-setup automatic mode
+
+On launch, Swiss Army Knife scans local saves, reads the session name directly from the latest save header, displays that save's inventory snapshot, and automatically selects or creates its blueprint directory. Every 15 seconds it looks for a newer save and refreshes the snapshot. If the optional Ficsit Remote Monitoring HTTP endpoint is running, the app switches to live inventory and actual throughput rates (refreshed every 10 seconds); if it goes offline, it falls back to the last available save. It also reconnects automatically when monitoring becomes available.
+
+**No file picker, session-name entry, or manual folder moving is needed for an ordinary local single-player game.** There are optional advanced controls to select a different save or force a different blueprint session; use **Auto-detect** to return to the latest save. The first snapshot may take longer on very large saves.
+
+When two successive snapshots from the same session are available, the dashboard can estimate **net inventory change/minute** from the time difference between saves. That is NOT the gross production/consumption throughput provided by FRM. The precise throughput columns remain unavailable without telemetry.
+
+### Limitations
+
+- Live machine throughput still needs FRM (and potentially Production Stats) installed and running; a static save does not contain a live production meter. Installing or modifying Satisfactory's mod setup is not attempted silently.
+- The Satisfactory Calculator map is a third-party web application. The map opens from inside Swiss Army Knife, but the app does not automatically upload private save files to that website without a separate deliberate action.
+- Autosave monitoring only works while Swiss Army Knife is running. Launch the app to begin auto-discovery.
+- Cloud-only saves, nonstandard folders, remote dedicated servers, and some modded save formats may need extra setup or support.
+
 ## Current features
 
 - Live factory monitor via the [Ficsit Remote Monitoring mod](https://ficsit.app/mod/FicsitRemoteMonitoring). The app queries its local HTTP API (default port 8080).
@@ -20,7 +35,7 @@ Requirements: Windows and Node.js 20 or later.
 3. Run **npm start**.
 4. For live rates, install Ficsit Remote Monitoring through Satisfactory Mod Manager, start Satisfactory with your save, and enable the FRM HTTP service if needed. Connect on localhost:8080 (or its configured port).
 5. Alternatively select a local .sav file from the app to view its last saved inventory quantities.
-6. Open Blueprint Manager, choose the session name used by your game save, and import local files or browse/download blueprints.
+6. Open Blueprint Manager; the latest save's session is already selected automatically. Import local files or browse/download blueprints.
 
 Run **npm test** to execute the automated tests. Run **npm run build:win** to generate an unsigned Windows portable executable in dist.
 
