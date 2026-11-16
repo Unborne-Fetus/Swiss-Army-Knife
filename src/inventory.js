@@ -81,7 +81,7 @@ function extractSaveInventory(save) {
   const rows = new Map();
   let components = 0;
   let stacksRead = 0;
-  for (const level of Array.isArray(save && save.levels) ? save.levels : []) {
+  for (const level of (Array.isArray(save && save.levels) ? save.levels : Object.values((save && save.levels) || {}))) {
     for (const object of Array.isArray(level.objects) ? level.objects : []) {
       const property = object && object.properties && object.properties.mInventoryStacks;
       if (!property) continue;
@@ -89,9 +89,12 @@ function extractSaveInventory(save) {
       if (!Array.isArray(stacks)) continue;
       components++;
       for (const stack of stacks) {
-        const properties = (stack && stack.value && stack.value.properties) || (stack && stack.properties) || {};
+        const properties = (stack && stack.value && (stack.value.properties || stack.value.values || stack.value)) ||
+          (stack && (stack.properties || stack.values)) || {};
         const rawItem = properties.Item && (properties.Item.value || properties.Item);
-        const reference = rawItem && (rawItem.itemReference || rawItem.itemName || (rawItem.value && rawItem.value.itemReference));
+        const reference = rawItem && (rawItem.itemReference || rawItem.itemName || rawItem.pathName ||
+          (rawItem.value && (rawItem.value.itemReference || rawItem.value.itemName || rawItem.value.pathName)));
+
         const id = itemKey(typeof reference === 'string' ? {itemName: reference} : reference);
         const count = numeric(properties.NumItems && (properties.NumItems.value ?? properties.NumItems));
         if (!id || count <= 0 || id.includes('None')) continue;

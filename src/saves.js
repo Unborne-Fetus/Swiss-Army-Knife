@@ -31,6 +31,21 @@ async function listSaves() {
   return result.sort((a,b)=>b.modifiedAt.localeCompare(a.modifiedAt));
 }
 
+async function readSaveHeader(filePath) {
+  // Header is uncompressed and includes the *actual* game session name.
+  // Reading only the beginning keeps frequent discovery inexpensive.
+  const file = await fs.open(filePath, 'r');
+  try {
+    const stats = await file.stat();
+    if (!stats.isFile() || stats.size < 64) throw new Error('Not a valid Satisfactory save.');
+    const head = Buffer.alloc(Math.min(stats.size, 256 * 1024));
+    const {bytesRead} = await file.read(head, 0, head.length, 0);
+    const {SaveReader,SatisfactorySaveHeader} = require('@etothepii/satisfactory-file-parser');
+    return SatisfactorySaveHeader.Parse(new SaveReader(
+      head.buffer.slice(head.byteOffset, head.byteOffset + bytesRead)));
+  } finally { await file.close(); }
+}
+
 async function loadSaveSnapshot(filePath) {
   if (typeof filePath !== 'string' || path.extname(filePath).toLowerCase() !== '.sav') {
     throw new Error('Choose a Satisfactory .sav file.');
@@ -44,7 +59,8 @@ async function loadSaveSnapshot(filePath) {
   const save = Parser.ParseSave(path.basename(filePath,'.sav'), arrayBuffer);
   const extracted = extractSaveInventory(save);
   return {
-    mode:'save',name:path.basename(filePath),capturedAt:stat.mtime.toISOString(),
+    mode:'save',name:path.basename(filePath),session:save.header?.sessionName || null,
+    capturedAt:stat.mtime.toISOString(),
     items:extracted.items,rateSource:'unavailable',
     warnings:[
       'Offline quantities are from parsed inventory components (including machines/players); they are not equivalent to FRM storage-only totals.',
@@ -54,4 +70,4 @@ async function loadSaveSnapshot(filePath) {
     stats:{components:extracted.components,stacks:extracted.stacksRead}
   };
 }
-module.exports = {listSaves,loadSaveSnapshot,saveRoot};
+module.exports = {listSaves,loadSaveSnapshot,readSaveHeader,saveRoot};

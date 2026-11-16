@@ -1,6 +1,6 @@
 'use strict';
 const el=id=>document.getElementById(id);
-const state={tab:'dashboard',mode:'none',port:8080,snapshot:null,session:'',busy:false,lastSave:''};
+const state={tab:'dashboard',mode:'none',port:8080,snapshot:null,session:'',busy:false,lastSave:'',offlineSnapshot:null,scanning:false};
 const fmt=new Intl.NumberFormat('en-US',{maximumFractionDigits:1});
 const amount=n=>n===null || n===undefined?'—':fmt.format(n);
 const signed=n=>n===null || n===undefined?'—':(n>0?'+':'')+fmt.format(n);
@@ -45,11 +45,12 @@ function renderTable(){
 }
 function renderSnapshot(snapshot){
   state.snapshot=snapshot;setOnline(snapshot.mode);
-  const items=snapshot.items||[],hasRates=snapshot.rateSource!=='unavailable';
+  const items=snapshot.items||[],hasRates=['production-stats','factory'].includes(snapshot.rateSource);
   el('snapshotTitle').textContent=snapshot.mode==='live'?'Live factory overview':(snapshot.name||'Offline save')+' overview';
   el('snapshotSubtitle').textContent=(snapshot.mode==='live'?'Live telemetry · ':'Save snapshot · ')+
     new Date(snapshot.capturedAt).toLocaleString()+
-    (hasRates?' · Rates from '+(snapshot.rateSource==='factory'?'factory machines':'Production Stats'):' · Rates unavailable');
+    (hasRates?' · Rates from '+(snapshot.rateSource==='factory'?'factory machines':'Production Stats'):
+    snapshot.rateSource==='save-delta'?' · Estimated inventory change/min from save history':' · Factory throughput unavailable');
   el('metricTypes').textContent=amount(items.length);
   el('metricItems').textContent=amount(items.reduce((v,i)=>v+i.total,0));
   el('metricProd').textContent=hasRates?amount(items.reduce((v,i)=>v+(i.produced||0),0)):'—';
@@ -80,7 +81,10 @@ async function readLive(silent=false){
     if(!silent)toast('Connected to local factory telemetry.');
   }catch(error){
     if(!silent)toast(error.message,true);
-    if(state.mode==='live')setOnline('none');
+    if(state.mode==='live'){
+      if(state.offlineSnapshot)renderSnapshot(state.offlineSnapshot);
+      else setOnline('none');
+    }
   }finally{state.busy=false;}
 }
 async function refreshCurrent(){
@@ -89,6 +93,29 @@ async function refreshCurrent(){
     const snapshot=await window.sak.loadSave(state.lastSave);return renderSnapshot(snapshot);
   }
   return refreshSaves();
+}
+async function scanAutomatically() {
+  if(state.scanning)return;
+  state.scanning=true;
+  try {
+    const result=await window.sak.autoScan();
+    if(result.selectedSession!==state.session) {
+      state.session=result.selectedSession||'';
+      el('currentSession').textContent=state.session?
+        'Session: '+state.session+(result.manualSession?' · Manual override':' · Auto-detected'):'No session detected';
+      await refreshSessions();
+      if(state.session)await updateInstalled();
+    }
+    el('autoSessionHint').textContent=result.latest?
+      'Detected from your latest save: '+result.latest.name+' · Session: '+result.latest.session:
+      'No save found yet. Start or save a Satisfactory session to detect it automatically.';
+    if(result.snapshot) {
+      state.offlineSnapshot=result.snapshot;
+      state.lastSave=result.latest.path;
+      if(state.mode!=='live')renderSnapshot(result.snapshot);
+    }
+    if(result.error && !state.snapshot)toast(result.error,true);
+  } finally {state.scanning=false;}
 }
 async function refreshSessions(){
   const sessions=await window.sak.sessions(),select=el('sessionSelect');select.replaceChildren();
@@ -100,7 +127,9 @@ async function chooseSession(name){
   if(!name)throw new Error('Enter or choose a session name.');
   const data=await window.sak.selectSession(name);state.session=data.session;
   el('currentSession').textContent='Session: '+state.session;el('newSession').value='';
-  await refreshSessions();renderInstalled(data.installed);toast('Target session set to '+state.session);
+  await refreshSessions();renderInstalled(data.installed);
+  el('autoSessionHint').textContent='Manual override enabled. Use “Auto-detect” to follow your latest game save.';
+  toast('Target session set to '+state.session);
 }
 function renderInstalled(files){
   const target=el('installedList');target.replaceChildren();
@@ -132,6 +161,10 @@ el('browseBlueprintsBtn').addEventListener('click',()=>action(async()=>{
   await window.sak.openSite('blueprints');
 }));
 el('selectSessionBtn').addEventListener('click',()=>action(()=>chooseSession(el('sessionSelect').value)));
+el('autoSessionBtn').addEventListener('click',()=>action(async()=>{
+  await window.sak.useActiveSession();state.session='';await scanAutomatically();
+  toast('Automatic session detection enabled.');
+}));
 el('createSessionBtn').addEventListener('click',()=>action(()=>chooseSession(el('newSession').value.trim())));
 el('importBlueprintsBtn').addEventListener('click',()=>action(async()=>{
   if(!state.session)throw new Error('Choose a session first.');
@@ -147,15 +180,19 @@ window.sak.onNotice(payload=>{
   if(!payload.isError)updateInstalled().catch(()=>{});
 });
 async function initialize(){
-  const settings=await window.sak.settings();state.port=settings.port||8080;
-  state.session=settings.session||'';el('port').value=state.port;
+  const settings=await window.sak.settings();
+  state.port=settings.port||8080;state.session=settings.session||'';
+  el('port').value=state.port;
   await Promise.all([refreshSessions(),refreshSaves()]);
-  if(state.session){el('currentSession').textContent='Session: '+state.session;await updateInstalled();}
-  const latest=el('saveSelect').value;await readLive(true);
-  if(state.mode!=='live'&&latest){
-    await action(async()=>{const snapshot=await window.sak.loadSave(latest);
-      state.lastSave=latest;renderSnapshot(snapshot);});
+  if(state.session){
+    el('currentSession').textContent='Session: '+state.session;
+    await updateInstalled();
   }
+  // No click, file picker, or folder setup: the newest save is opened automatically.
+  await scanAutomatically();
+  // Prefer actual game telemetry when the optional monitoring mod is available.
+  await readLive(true);
 }
-setInterval(()=>{if(state.mode==='live'&&!document.hidden)readLive(true).catch(()=>{});},10000);
+setInterval(()=>{readLive(true).catch(()=>{});},10000);
+setInterval(()=>{scanAutomatically().catch(error=>toast(error.message,true));},15000);
 initialize().catch(error=>toast(error.message,true));

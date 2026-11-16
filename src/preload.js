@@ -3,6 +3,8 @@ const {contextBridge,ipcRenderer} = require('electron');
 
 contextBridge.exposeInMainWorld('sak',{
   settings:()=>ipcRenderer.invoke('settings:get'),
+  autoScan:()=>ipcRenderer.invoke('auto:scan'),
+  useActiveSession:()=>ipcRenderer.invoke('auto:use-active'),
   saves:()=>ipcRenderer.invoke('saves:list'),
   loadSave:path=>ipcRenderer.invoke('saves:load',path),
   chooseSave:()=>ipcRenderer.invoke('saves:choose'),

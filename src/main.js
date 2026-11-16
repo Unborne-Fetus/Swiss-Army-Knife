@@ -7,6 +7,7 @@ const path = require('node:path');
 const {getLiveSnapshot,validatePort} = require('./telemetry');
 const {listSaves,loadSaveSnapshot} = require('./saves');
 const blueprints = require('./blueprints');
+const {AutoDiscovery} = require('./autodiscovery');
 
 const SITES = Object.freeze({
   map:'https://satisfactory-calculator.com/en/interactive-map',
@@ -15,8 +16,9 @@ const SITES = Object.freeze({
 let mainWindow;
 let blueprintBrowser;
 let selectedSession='';
+let manualSession=false;
+const autodiscovery=new AutoDiscovery();
 let port=8080;
-let openingBrowser=false;
 
 function notify(message,isError=false) {
   if(mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('notice',{message,isError});
@@ -26,13 +28,14 @@ async function loadSettings(){
   try {
     const settings=JSON.parse(await fs.readFile(settingsFile(),'utf8'));
     selectedSession=settings.session ? blueprints.safeSession(settings.session) : '';
+    manualSession=Boolean(settings.manualSession);
     port=validatePort(settings.port || 8080);
-  } catch {selectedSession='';port=8080;}
+  } catch {selectedSession='';manualSession=false;port=8080;}
 }
 async function persistSettings(){
   const file=settingsFile();
   await fs.mkdir(path.dirname(file),{recursive:true});
-  await fs.writeFile(file,JSON.stringify({session:selectedSession,port},null,2));
+  await fs.writeFile(file,JSON.stringify({session:selectedSession,manualSession,port},null,2));
 }
 function createMainWindow(){
   mainWindow=new BrowserWindow({
@@ -77,7 +80,8 @@ function openWebsite(which) {
   site.loadURL(SITES[which]).catch(error=>notify('Site could not load: '+error.message,true));
 }
 async function handleDownload(item,source) {
-  if(!selectedSession) {
+  const targetSession=selectedSession;
+  if(!targetSession) {
     item.cancel();
     notify('Choose a blueprint session in Swiss Army Knife before downloading.',true);
     return;
@@ -91,7 +95,7 @@ async function handleDownload(item,source) {
   item.once('done',async (_event,state)=>{
     try {
       if(state!=='completed') throw new Error('Download '+state);
-      const output=await blueprints.installBlueprints(selectedSession,[tempFile]);
+      const output=await blueprints.installBlueprints(targetSession,[tempFile]);
       notify('Installed '+output.installed.join(', ')+' into '+output.session+'. Reload the save in-game to see it.');
     } catch(error) {
       notify('Blueprint installation failed: '+error.message,true);
@@ -113,8 +117,26 @@ function registerDownloads(){
     });
   });
 }
+async function scanActiveSave() {
+  const result=await autodiscovery.scan();
+  if(result.latest && !manualSession && result.latest.session!==selectedSession) {
+    selectedSession=result.latest.session;
+    // Create the blueprint folder automatically, even for a first-time session.
+    await fs.mkdir(path.join(blueprints.blueprintRoot(),selectedSession),{recursive:true});
+    await persistSettings();
+  }
+  return {...result,selectedSession,manualSession};
+}
+
 function handlers() {
-  ipcMain.handle('settings:get',()=>({session:selectedSession,port,blueprintRoot:blueprints.blueprintRoot()}));
+  ipcMain.handle('auto:scan',()=>scanActiveSave());
+  ipcMain.handle('auto:use-active',async()=>{
+    manualSession=false;
+    selectedSession='';
+    await persistSettings();
+    return scanActiveSave();
+  });
+  ipcMain.handle('settings:get',()=>({session:selectedSession,manualSession,port,blueprintRoot:blueprints.blueprintRoot()}));
   ipcMain.handle('saves:list',()=>listSaves());
   ipcMain.handle('saves:load',(_event,filePath)=>loadSaveSnapshot(filePath));
   ipcMain.handle('saves:choose',async()=>{
@@ -137,6 +159,7 @@ function handlers() {
   ipcMain.handle('blueprints:sessions',()=>blueprints.listSessions());
   ipcMain.handle('blueprints:select',async(_event,session)=>{
     selectedSession=blueprints.safeSession(session);
+    manualSession=true;
     await fs.mkdir(path.join(blueprints.blueprintRoot(),selectedSession),{recursive:true});
     await persistSettings();
     return {session:selectedSession,installed:await blueprints.listInstalled(selectedSession)};

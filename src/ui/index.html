@@ -42,9 +42,10 @@
 </section>
 <section class="view" id="tab-blueprints">
   <div class="heading short"><div><p class="eyebrow">BUILD FASTER</p><h1>Blueprint <em>manager.</em></h1><p class="lead">Browse community builds, then install blueprints directly to your game session.</p></div></div>
-  <div class="panel session-panel"><div><label for="sessionSelect">TARGET SAVE SESSION</label><div class="inline"><select id="sessionSelect"><option value="">Choose a session…</option></select><button class="secondary" id="selectSessionBtn">Select</button></div></div>
+  <div class="info-line" id="autoSessionHint">Detecting your latest Satisfactory save and blueprint folder automatically…</div>
+  <div class="panel session-panel"><div><label for="sessionSelect">TARGET SAVE SESSION (OPTIONAL OVERRIDE)</label><div class="inline"><select id="sessionSelect"><option value="">Choose a session…</option></select><button class="secondary" id="selectSessionBtn">Select</button><button class="secondary" id="autoSessionBtn">Auto-detect</button></div></div>
   <div><label for="newSession">OR CREATE A SESSION FOLDER</label><div class="inline"><input id="newSession" type="text" placeholder="Your session name"><button class="secondary" id="createSessionBtn">Create</button></div></div></div>
-  <div class="feature-panel blueprints-feature"><span class="pill">BLUEPRINT LIBRARY</span><h2>Find it. Download it.<br>Build it.</h2><p>Choose a target session first. Download a .sbp, .sbpcfg or .zip from the blueprint browser to install it automatically. You can also import local files.</p>
+  <div class="feature-panel blueprints-feature"><span class="pill">BLUEPRINT LIBRARY</span><h2>Find it. Download it.<br>Build it.</h2><p>The latest save determines the target session automatically. Download a .sbp, .sbpcfg or .zip from the blueprint browser to install it automatically. You can also import local files.</p>
   <div class="actions"><button class="primary" id="browseBlueprintsBtn">Browse Satisfactory Calculator blueprints</button><button class="secondary" id="importBlueprintsBtn">Import local files</button></div></div>
   <div class="panel installed-panel"><div class="panel-header"><div><h2>Installed blueprints</h2><p id="currentSession">No session selected</p></div><button class="secondary" id="openFolderBtn">Open folder ↗</button></div>
   <div id="installedList" class="installed-list"><div class="empty">Choose a session to see installed blueprints.</div></div></div>
