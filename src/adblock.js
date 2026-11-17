@@ -9,13 +9,13 @@ const path=require('node:path');
  */
 function makeAdBlock({ses,cacheDir,fetcher=fetch,loadEngine}){
   let engine=null,enabled=false,loading=null,lastError=null;
-  const loader=loadEngine||async()=>{
+  const loader=loadEngine||(async()=>{
     const {ElectronBlocker}=await import('@ghostery/adblocker-electron');
     await fs.mkdir(cacheDir,{recursive:true});
     return ElectronBlocker.fromPrebuiltAdsAndTracking(fetcher,{
       path:path.join(cacheDir,'filters.bin'),read:fs.readFile,write:fs.writeFile
     });
-  };
+  });
   async function setEnabled(value){
     if(typeof value!=='boolean')throw Error('Invalid ad-blocking preference.');
     enabled=value;

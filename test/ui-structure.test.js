@@ -25,7 +25,8 @@ test('map and Satisfactory Calculator planners have integrated workspaces',()=>{
   }
 });
 test('renderer scripts have valid JavaScript syntax',()=>{
-  for(const f of ['src/ui/app.js','src/ui/sort.js']){
+  for(const f of ['src/ui/app.js','src/ui/sort.js','src/main.js','src/preload.js',
+    'src/adblock.js','src/live-diagnostics.js','src/telemetry.js','src/embedded-tools.js']){
     assert.doesNotThrow(()=>new Script(fs.readFileSync(path.join(ROOT,f),'utf8'),{filename:f}));
   }
 });
