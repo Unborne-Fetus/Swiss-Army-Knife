@@ -17,7 +17,8 @@ const SITES = Object.freeze({
   blueprints:'https://satisfactory-calculator.com/en/blueprints',
   production:'https://satisfactory-calculator.com/en/planners/production',
   power:'https://satisfactory-calculator.com/en/planners/power',
-  mod:'https://docs.ficsit.app/ficsitremotemonitoring/latest/index.html'
+  mod:'https://docs.ficsit.app/ficsitremotemonitoring/latest/index.html',
+  'mod-install':'https://ficsit.app/mod/FicsitRemoteMonitoring'
 });
 let mainWindow;
 let blueprintBrowser;

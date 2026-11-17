@@ -2,7 +2,7 @@
 
 const el=id=>document.getElementById(id);
 const state={
-  tab:'dashboard',port:8080,session:'',mode:'connecting',
+  tab:'dashboard',port:8080,session:'',mode:'connecting',adBlocking:true,
   snapshot:null,sortField:'name',sortDirection:'asc',
   busy:false,scanning:false,catalogLoaded:false,
   catalogPage:{isDetail:false,canGoBack:false}
@@ -35,7 +35,8 @@ function setConnection(status,message){
   el('liveMessage').textContent=message||'Start Satisfactory with Ficsit Remote Monitoring enabled.';
   el('settingsStatus').textContent=connected?
     'Live monitoring connected on port '+state.port+'.':
-    'Live monitoring unavailable. Install/enable FRM and start the game. Auto-retry is active.';
+    'Live monitoring is not yet available. See the connection instructions on the dashboard.';
+  el('connectionHelp').hidden=connected;
 }
 function setMetrics(items,available){
   const sum=key=>items.reduce((total,item)=>total+(Number(item[key])||0),0);
@@ -144,18 +145,28 @@ async function readLive(silent=false){
   if(state.busy)return;
   state.busy=true;
   try{
-    const snapshot=await window.sak.live(state.port);
-    renderLive(snapshot);
-    if(!silent)toast('Factory data synchronized.');
-  }catch(error){
+    const result=await window.sak.livePoll();
+    if(result.connected){
+      state.port=result.port;
+      el('monitorPort').value=result.port;
+      renderLive(result.snapshot);
+      if(!silent)toast('Factory data synchronized on port '+result.port+'.');
+      return;
+    }
     const last=state.snapshot;
-    setConnection('offline','Satisfactory or FRM is not reachable on localhost:'+state.port+
-      '. Checking again automatically every 10 seconds.');
+    const reason=result.message||'Ficsit Remote Monitoring is not responding.';
+    setConnection('offline',reason);
+    el('connectionErrorText').textContent=reason;
     el('snapshotSubtitle').textContent=last?
-      'Connection interrupted · Displayed figures are from the last successful sync.':
-      'Start the game with Ficsit Remote Monitoring for live data.';
+      'Connection interrupted · Values below are from your last successful sync.':
+      'Live statistics will appear as soon as Ficsit Remote Monitoring connects.';
     el('syncTag').textContent='RECONNECTING';
-    if(!silent)toast(error.message||'Cannot connect to game',true);
+    if(!silent)toast('Not connected yet. Follow the instructions on the dashboard.',true);
+  }catch(error){
+    setConnection('offline','Unable to check the local monitoring service.');
+    el('connectionErrorText').textContent=error.message||String(error);
+    el('syncTag').textContent='RECONNECTING';
+    if(!silent)toast(error.message||String(error),true);
   }finally{state.busy=false;}
 }
 async function scanAutomatically(){
@@ -246,6 +257,15 @@ document.querySelectorAll('[data-tab]').forEach(button=>
 document.querySelectorAll('[data-sort]').forEach(button=>
   button.addEventListener('click',()=>selectSort(button.dataset.sort)));
 el('refreshBtn').addEventListener('click',()=>action(()=>readLive(false)));
+el('retryConnectionBtn').addEventListener('click',()=>action(()=>readLive(false)));
+el('openConnectionSettingsBtn').addEventListener('click',()=>switchTab('settings'));
+el('installFRMBtn').addEventListener('click',()=>action(()=>window.sak.openSiteExternally('mod-install')));
+el('autoDetectPortBtn').addEventListener('click',()=>action(async()=>{
+  const result=await window.sak.autoPort();
+  state.port=result.port;
+  el('monitorPort').value=result.port;
+  await readLive(false);
+}));
 el('itemSearch').addEventListener('input',renderTable);
 el('savePortBtn').addEventListener('click',()=>action(async()=>{
   const port=Number(el('monitorPort').value);
@@ -304,9 +324,23 @@ window.sak.onNotice(payload=>{
   toast(payload.message,payload.isError);
   if(!payload.isError)updateInstalled().catch(()=>{});
 });
+function renderProtection(result){
+  el('adBlockingCheck').checked=!!result.enabled;
+  el('adBlockingStatus').textContent=result.active?
+    'Protection active: uBlock/EasyList-compatible ad and tracker filtering.' :
+    result.error?'Could not initialize filters: '+result.error:
+    result.enabled?'Preparing protection filters. If offline, retry when connected.':
+    'Ad and tracker protection is disabled.';
+}
+el('adBlockingCheck').addEventListener('change',()=>action(async()=>{
+  const result=await window.sak.setAdBlocking(el('adBlockingCheck').checked);
+  renderProtection(result);
+}));
+window.sak.onAdBlockState(renderProtection);
 async function initialize(){
   const settings=await window.sak.settings();
   state.port=settings.port||8080;state.session=settings.session||'';
+  renderProtection(await window.sak.getAdBlocking());
   el('monitorPort').value=state.port;
   if(state.session){el('currentSession').textContent='Session: '+state.session;await updateInstalled();}
   await Promise.all([readLive(true),refreshSessions(),scanAutomatically()]);

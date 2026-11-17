@@ -3,6 +3,15 @@ const {contextBridge,ipcRenderer} = require('electron');
 
 contextBridge.exposeInMainWorld('sak',{
   settings:()=>ipcRenderer.invoke('settings:get'),
+  livePoll:()=>ipcRenderer.invoke('live:poll'),
+  autoPort:()=>ipcRenderer.invoke('live:automatic'),
+  getAdBlocking:()=>ipcRenderer.invoke('adblock:status'),
+  setAdBlocking:enabled=>ipcRenderer.invoke('adblock:set',enabled),
+  onAdBlockState:callback=>{
+    const listener=(_event,value)=>callback(value);
+    ipcRenderer.on('adblock:state',listener);
+    return ()=>ipcRenderer.removeListener('adblock:state',listener);
+  },
   autoScan:()=>ipcRenderer.invoke('auto:scan'),
   catalogOpen:()=>ipcRenderer.invoke('catalog:open'),
   toolShow:(name,rect)=>ipcRenderer.invoke('tools:show',name,rect),

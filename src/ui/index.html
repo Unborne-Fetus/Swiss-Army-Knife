@@ -14,7 +14,7 @@
   <button class="nav" data-tab="blueprints"><span>▤</span> Blueprint manager</button>
   <button class="nav" data-tab="settings"><span>⋯</span> Settings</button></nav>
   <div class="sidebar-bottom"><div class="small-status"><span class="status-dot" id="connectionDot"></span><span id="connectionText">Connecting to Satisfactory…</span></div>
-  <p>Unofficial community companion. No game files are modified by the dashboard.</p><small>VERSION 0.1.0 · WINDOWS</small></div>
+  <p>Unofficial community companion. No game files are modified by the dashboard.</p><small>VERSION 0.2.1 · WINDOWS</small></div>
 </aside>
 <main class="main">
 <header class="topbar"><div class="crumb">SATISFACTORY <span>/</span> <strong id="crumb">FACTORY DASHBOARD</strong></div><span class="tag">EARLY ACCESS</span></header>
@@ -28,6 +28,18 @@
     <div class="live-desc"><strong id="liveTitle">Looking for your factory…</strong>
       <p id="liveMessage">Detecting Ficsit Remote Monitoring on this PC. Live connection will retry automatically.</p></div>
     <button class="secondary" id="refreshBtn">↻ Sync now</button>
+  </div>
+  <div class="panel recovery-panel" id="connectionHelp" hidden>
+    <h2>Connect Satisfactory to Swiss Army Knife</h2>
+    <p id="connectionErrorText">Waiting for the local monitoring service.</p>
+    <div class="recovery-steps">
+      <p><strong>1.</strong> Install <b>Ficsit Remote Monitoring</b> through Satisfactory Mod Manager, then launch Satisfactory with the mod enabled.</p>
+      <p><strong>2.</strong> Open in-game chat and enter <code>/frm http start</code> to start the monitoring server.</p>
+      <p><strong>3.</strong> In the game's FRM mod settings, enable the <b>HTTP/Web Server Autostart</b> option so future launches connect automatically.</p>
+    </div>
+    <div class="actions"><button class="primary" id="installFRMBtn">Get Ficsit Remote Monitoring ↗</button>
+      <button class="secondary" id="retryConnectionBtn">Check connection again</button>
+      <button class="secondary" id="openConnectionSettingsBtn">Connection settings</button></div>
   </div>
   <div class="snapshot-heading"><div><h2 id="snapshotTitle">Live factory overview</h2>
     <p id="snapshotSubtitle">Connecting to local game telemetry…</p></div>
@@ -109,9 +121,19 @@
   <div class="panel settings-panel">
     <label for="monitorPort">LOCAL MONITORING PORT</label>
     <div class="inline"><span class="muted fixed">127.0.0.1 :</span><input type="number" min="1" max="65535" id="monitorPort" value="8080">
-      <button class="primary" id="savePortBtn">Save and reconnect</button></div>
+      <button class="primary" id="savePortBtn">Save and reconnect</button>
+      <button class="secondary" id="autoDetectPortBtn">Auto-detect port</button></div>
     <p id="settingsStatus">To see live game data, install and enable Ficsit Remote Monitoring using Satisfactory Mod Manager.</p>
     <button class="secondary" id="openModInfo">Monitoring mod documentation ↗</button>
+    <div class="setting-divider"></div>
+    <h2>Ad and tracker protection</h2>
+    <label class="toggle-label" for="adBlockingCheck">
+      <input id="adBlockingCheck" type="checkbox" checked>
+      <span>Block ads and trackers on embedded Satisfactory Calculator pages</span>
+    </label>
+    <p>This uses uBlock/EasyList-compatible filters through an Electron-native engine.
+      The uBlock Origin Lite Chrome extension itself cannot run in Electron.</p>
+    <p id="adBlockingStatus" class="privacy-status">Loading protection filters…</p>
   </div>
 </section>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>

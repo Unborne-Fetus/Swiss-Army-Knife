@@ -33,3 +33,22 @@
   .item-details small{display:none}
   .metric-grid{gap:10px}
 }
+
+/* Guided FRM connection recovery (not a pop-up on every poll) */
+[hidden]{display:none!important}
+.recovery-panel{padding:23px;margin-top:16px;margin-bottom:13px;border-color:#6b5935;background:linear-gradient(110deg,#2a291e,#14242e)}
+.recovery-panel h2{font-size:16px;color:#efcb77}
+.recovery-panel>p{line-height:1.65;font-size:12px;color:#c4d3da;margin-top:9px}
+.recovery-steps{margin-top:13px;display:grid;gap:6px}
+.recovery-steps p{margin:0;font-size:12px;line-height:1.7;color:#c1d2dd}
+.recovery-steps strong{color:#e6bb55}
+.recovery-steps code{background:#0b1720;color:#eed48b;border:1px solid #4e594b;border-radius:5px;padding:4px 8px;font-size:12px;font-weight:800;user-select:all}
+.recovery-panel .actions{margin-top:17px}
+.setting-divider{height:1px;background:#30444f;margin:25px 0}
+.toggle-label{display:flex;align-items:center;gap:13px;color:#e3eef6;font-size:13px;letter-spacing:0;text-transform:none;line-height:1.4;cursor:pointer}
+.toggle-label input{width:18px;height:18px;flex-shrink:0;accent-color:#e8ba50}
+.settings-panel .privacy-status{font-size:12px;color:#b7c6cf;margin:8px 0 0}
+@media(max-width:960px){
+ .recovery-panel .actions{gap:8px}
+ .recovery-panel .actions button{white-space:normal}
+}

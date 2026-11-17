@@ -1,7 +1,7 @@
 {
   "name": "satisfactory-swiss-army-knife",
-  "version": "0.2.0",
-  "description": "Live Satisfactory factory dashboard, embedded planners, map and blueprint manager",
+  "version": "0.2.1",
+  "description": "Live Satisfactory companion with automatic FRM troubleshooting and Electron-native ad blocking",
   "main": "src/main.js",
   "license": "MIT",
   "author": "Swiss Army Knife contributors",
@@ -13,7 +13,8 @@
   },
   "dependencies": {
     "@etothepii/satisfactory-file-parser": "^4.1.2",
-    "adm-zip": "^0.5.16"
+    "adm-zip": "^0.5.16",
+    "@ghostery/adblocker-electron": "^2.20.3"
   },
   "devDependencies": {
     "electron": "^33.0.0",

@@ -19,10 +19,10 @@ async function endpoint(port, name) {
   return response.json();
 }
 
-async function getLiveSnapshot(requestedPort) {
+async function getLiveSnapshot(requestedPort,options={}) {
   const port = validatePort(requestedPort || 8080);
   const [worldResult, cloudResult, statsResult, factoryResult] = await Promise.allSettled([
-    endpoint(port,'getWorldInv'),
+    options.world !== undefined?Promise.resolve(options.world):endpoint(port,'getWorldInv'),
     endpoint(port,'getCloudInv'),
     endpoint(port,'getProdStats'),
     endpoint(port,'getFactory')

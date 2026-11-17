@@ -1,12 +1,31 @@
 # Swiss Army Knife — Satisfactory Companion
 
-**Swiss Army Knife 0.2** is an unofficial Windows companion for live Satisfactory inventories, Satisfactory Calculator map/planners, and automatic community blueprint installation.
+**Swiss Army Knife 0.2.1** is an unofficial Windows companion for live Satisfactory inventories, Satisfactory Calculator map/planners, and automatic community blueprint installation.
 
 ## Live-first dashboard
 
 The first page connects automatically to Ficsit Remote Monitoring (FRM) on the local machine, using port 8080 by default. If the game or FRM is not yet running, it retries every 10 seconds. No save selection or uploading is required or displayed on the first page. On disconnect, the UI clearly labels the last inventory values as stale while continuing to reconnect.
 
-Live totals and throughput require the FRM mod to be installed and enabled via Satisfactory Mod Manager. The application does not silently install or configure mods. The port can be changed under Settings if FRM uses a different port.
+Live totals and throughput require the FRM mod to be installed and enabled via Satisfactory Mod Manager. The app cannot create this game telemetry on its own.
+
+### Fixing "Reconnecting automatically" / localhost:8080
+
+The FRM HTTP server may be stopped even when the mod is installed. In a loaded Satisfactory world:
+
+1. Install and enable [Ficsit Remote Monitoring](https://ficsit.app/mod/FicsitRemoteMonitoring) with Satisfactory Mod Manager if you have not already.
+2. Open in-game chat and enter `/frm http start`. This starts the mod's HTTP API.
+3. To make the change persistent, enable the FRM web-server **Autostart** option from the game's mod settings.
+4. Press **Check connection again** in Swiss Army Knife, or let it retry automatically.
+
+Swiss Army Knife now reads the local game's FRM configuration when available, tries its configured port alongside common local ports, and distinguishes a stopped service from unexpected API data or a wrong port. It shows recovery steps directly on the dashboard rather than a repeating error toast. This is still a real mod requirement: the app cannot start an HTTP server that is not running inside the game.
+
+Change the port in **Settings** to override auto-detection or return to **Auto-detect port** if the chosen port is wrong.
+
+### Ad and tracker protection
+
+The Settings tab contains ad/tracker filtering for Satisfactory Calculator's embedded map, planners, and blueprint browser. It is on by default and uses [Ghostery's Electron ad-blocking engine](https://github.com/ghostery/adblocker), with **uBlock/EasyList-compatible filtering** and a cached ruleset. You can disable it from Settings if it interferes with a website. If rules cannot be loaded and no cache is present, the app continues normally but tells you protection is inactive.
+
+**The actual uBlock Origin Lite extension is not installed inside the app:** Electron does not support the Chrome `declarativeNetRequest` API that the extension requires. The integrated filtering provides similar network and cosmetic filtering for these embedded pages without misrepresenting itself as uBlock Origin Lite.
 
 Inventory rows have game-generated icons extracted locally from FRM's Icons endpoint, with a fallback initial for missing icons. Columns include name, storage, Dimensional Depot, total, production/min, consumption/min and net/min. Click any column header to sort ascending/descending, and use the search box to filter items.
 
@@ -39,7 +58,7 @@ Requires Windows and Node.js 20+ to run from source.
 3. Run npm start.
 4. Launch Satisfactory with Ficsit Remote Monitoring enabled to see live data. The app connects automatically.
 
-Run npm test for automated checks, or npm run build:win for an unsigned portable Windows EXE. GitHub Actions produces a Windows executable artifact after successful tests and packaging.
+On PowerShell systems that block `npm.ps1`, use `npm.cmd install` and `npm.cmd start` instead. Run `npm.cmd test` for automated checks, or `npm.cmd run build:win` for an unsigned portable Windows EXE. GitHub Actions produces a Windows executable artifact after successful tests and packaging.
 
 ## Accuracy and limitations
 
