@@ -325,21 +325,39 @@ window.sak.onNotice(payload=>{
   if(!payload.isError)updateInstalled().catch(()=>{});
 });
 function renderProtection(result){
+  if(!result)return;
   el('adBlockingCheck').checked=!!result.enabled;
+  const count=Number(result.blockedRequests)||0;
+  const limited=result.source==='fallback';
   el('adBlockingStatus').textContent=result.active?
-    'Protection active: uBlock/EasyList-compatible ad and tracker filtering.' :
-    result.error?'Could not initialize filters: '+result.error:
-    result.enabled?'Preparing protection filters. If offline, retry when connected.':
-    'Ad and tracker protection is disabled.';
+    ('Protection is active ('+(limited?'basic fallback':'full community rules')+
+      '). '+count+' ad/tracker requests blocked this session.'+
+      (result.error?' '+result.error:'')) :
+    result.error?'Protection is INACTIVE: '+result.error:
+    result.enabled?'Preparing ad/tracker filter lists…':
+    'Ad/tracker protection is disabled.';
 }
 el('adBlockingCheck').addEventListener('change',()=>action(async()=>{
   const result=await window.sak.setAdBlocking(el('adBlockingCheck').checked);
   renderProtection(result);
 }));
 window.sak.onAdBlockState(renderProtection);
+el('retryProtectionBtn').addEventListener('click',()=>action(async()=>{
+  renderProtection(await window.sak.setAdBlocking(true));
+}));
+setInterval(async()=>{
+  if(state.tab!=='settings')return;
+  try{renderProtection(await window.sak.getAdBlocking());}catch{}
+},5000);
 async function initialize(){
   const settings=await window.sak.settings();
   state.port=settings.port||8080;state.session=settings.session||'';
+  const bridge=await window.sak.bridgeStatus();
+  const compatible=!!bridge&&bridge.protocol===2;
+  el('coreMismatch').hidden=compatible;
+  el('coreVersionStatus').textContent=compatible?
+    'Main process '+bridge.version+' · Live telemetry and privacy IPC available.' :
+    'Old main process detected. Quit and relaunch the updated executable.';
   renderProtection(await window.sak.getAdBlocking());
   el('monitorPort').value=state.port;
   if(state.session){el('currentSession').textContent='Session: '+state.session;await updateInstalled();}

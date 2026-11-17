@@ -14,7 +14,7 @@
   <button class="nav" data-tab="blueprints"><span>▤</span> Blueprint manager</button>
   <button class="nav" data-tab="settings"><span>⋯</span> Settings</button></nav>
   <div class="sidebar-bottom"><div class="small-status"><span class="status-dot" id="connectionDot"></span><span id="connectionText">Connecting to Satisfactory…</span></div>
-  <p>Unofficial community companion. No game files are modified by the dashboard.</p><small>VERSION 0.2.1 · WINDOWS</small></div>
+  <p>Unofficial community companion. No game files are modified by the dashboard.</p><small>VERSION 0.2.2 · WINDOWS</small></div>
 </aside>
 <main class="main">
 <header class="topbar"><div class="crumb">SATISFACTORY <span>/</span> <strong id="crumb">FACTORY DASHBOARD</strong></div><span class="tag">EARLY ACCESS</span></header>
@@ -23,6 +23,10 @@
     <h1>Your entire factory,<br><em>at a glance.</em></h1>
     <p class="lead">Live inventory, production and consumption — automatically synchronized while Satisfactory is running.</p>
   </div><div class="heading-graphic"><div class="ring ring-one"></div><div class="ring ring-two"></div><div class="ring-core">S</div></div></div>
+  <div class="panel recovery-panel" id="coreMismatch" hidden>
+    <h2>Application update requires a restart</h2>
+    <p>Your dashboard is newer than the background process running it. Fully exit Swiss Army Knife (including any existing terminal session), then launch the updated executable. Reloading the page alone will not update the main process.</p>
+  </div>
   <div class="panel live-bar">
     <div class="live-symbol"><span class="status-dot" id="liveDot"></span></div>
     <div class="live-desc"><strong id="liveTitle">Looking for your factory…</strong>
@@ -134,6 +138,8 @@
     <p>This uses uBlock/EasyList-compatible filters through an Electron-native engine.
       The uBlock Origin Lite Chrome extension itself cannot run in Electron.</p>
     <p id="adBlockingStatus" class="privacy-status">Loading protection filters…</p>
+    <button class="secondary" id="retryProtectionBtn">Retry protection setup</button>
+    <p id="coreVersionStatus">Checking application core version…</p>
   </div>
 </section>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>

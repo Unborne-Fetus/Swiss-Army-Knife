@@ -34,3 +34,28 @@ test('renderer DOM lookups refer to present control ids',()=>{
   const ids=[...source.matchAll(/el\('([^']+)'\)/g)].map(match=>match[1]);
   for(const id of ids) assert.ok(html.includes('id="'+id+'"'),'Missing html id: '+id);
 });
+
+test('Electron main/renderer IPC contract: live and ad blocker handlers must exist',()=>{
+  const main=fs.readFileSync(path.join(ROOT,'src/main.js'),'utf8');
+  const preload=fs.readFileSync(path.join(ROOT,'src/preload.js'),'utf8');
+  for(const channel of ['live:poll','adblock:status','adblock:set','live:automatic','bridge:status']){
+    assert.ok(main.includes("ipcMain.handle('"+channel+"'"),
+      'Main process is missing '+channel+'; a renderer-only update breaks the application');
+  }
+  assert.ok(preload.includes("ipcRenderer.invoke('live:poll'"));
+  assert.ok(preload.includes("ipcRenderer.invoke('live:read'"),
+    'Older running main processes must retain live:read compatibility');
+  assert.ok(preload.includes("ipcRenderer.invoke('bridge:status'"));
+  assert.ok(source.includes('window.sak.bridgeStatus()'));
+  const boot=main.slice(main.indexOf('app.whenReady().then('));
+  assert.ok(boot.indexOf('  handlers();')<boot.indexOf('  createMainWindow();'),
+    'IPC handlers must register BEFORE the renderer can load');
+  assert.ok(main.includes('await ensureProtection();'),
+    'Filtering should activate before community pages are loaded');
+});
+test('version mismatch warning and visible filtering status are present',()=>{
+  assert.ok(html.includes('id="coreMismatch"'));
+  assert.ok(html.includes('id="coreVersionStatus"'));
+  assert.ok(html.includes('id="adBlockingStatus"'));
+  assert.ok(html.includes('id="retryProtectionBtn"'));
+});

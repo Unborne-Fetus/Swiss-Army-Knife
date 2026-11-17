@@ -1,12 +1,18 @@
 # Swiss Army Knife — Satisfactory Companion
 
-**Swiss Army Knife 0.2.1** is an unofficial Windows companion for live Satisfactory inventories, Satisfactory Calculator map/planners, and automatic community blueprint installation.
+**Swiss Army Knife 0.2.2** is an unofficial Windows companion for live Satisfactory inventories, Satisfactory Calculator map/planners, and automatic community blueprint installation.
 
 ## Live-first dashboard
 
 The first page connects automatically to Ficsit Remote Monitoring (FRM) on the local machine, using port 8080 by default. If the game or FRM is not yet running, it retries every 10 seconds. No save selection or uploading is required or displayed on the first page. On disconnect, the UI clearly labels the last inventory values as stale while continuing to reconnect.
 
 Live totals and throughput require the FRM mod to be installed and enabled via Satisfactory Mod Manager. The app cannot create this game telemetry on its own.
+
+### Fixing mismatched main process / "No handler registered for live:poll"
+
+Version 0.2.1 accidentally shipped a **newer frontend with an older Electron main process**. This caused "No handler registered for live:poll", disabled live diagnostics and prevented the ad blocker from ever initializing. Version 0.2.2 restores the missing main handlers, tests the IPC contract, and registers all IPC channels before the dashboard loads. A compatibility fallback can temporarily use the older live:read API while the old process is running.
+
+**Close all running Swiss Army Knife windows and fully stop the previous Electron/npm process before launching the new executable.** Refreshing the page or copying new files into a running app does not update the main process. The dashboard now checks the core version and explicitly displays a restart warning on mismatch.
 
 ### Fixing "Reconnecting automatically" / localhost:8080
 
@@ -23,7 +29,7 @@ Change the port in **Settings** to override auto-detection or return to **Auto-d
 
 ### Ad and tracker protection
 
-The Settings tab contains ad/tracker filtering for Satisfactory Calculator's embedded map, planners, and blueprint browser. It is on by default and uses [Ghostery's Electron ad-blocking engine](https://github.com/ghostery/adblocker), with **uBlock/EasyList-compatible filtering** and a cached ruleset. You can disable it from Settings if it interferes with a website. If rules cannot be loaded and no cache is present, the app continues normally but tells you protection is inactive.
+The Settings tab contains ad/tracker filtering for Satisfactory Calculator's embedded map, planners, and blueprint browser. It is on by default and uses [Ghostery's Electron ad-blocking engine](https://github.com/ghostery/adblocker), with **uBlock/EasyList-compatible filtering** and a cached ruleset. You can disable it from Settings if it interferes with a website. If full filter lists cannot be loaded, the app uses a clearly identified small offline fallback ruleset. Settings shows whether protection is active, the rule source, a live blocked-request count, and a retry button. Satisfactory Calculator views wait for filter setup before their initial load.
 
 **The actual uBlock Origin Lite extension is not installed inside the app:** Electron does not support the Chrome `declarativeNetRequest` API that the extension requires. The integrated filtering provides similar network and cosmetic filtering for these embedded pages without misrepresenting itself as uBlock Origin Lite.
 

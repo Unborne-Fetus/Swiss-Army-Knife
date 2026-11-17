@@ -1,6 +1,6 @@
 {
   "name": "satisfactory-swiss-army-knife",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Live Satisfactory companion with automatic FRM troubleshooting and Electron-native ad blocking",
   "main": "src/main.js",
   "license": "MIT",

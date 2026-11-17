@@ -1,11 +1,39 @@
 'use strict';
 const {contextBridge,ipcRenderer} = require('electron');
 
+const isMissingHandler=error=>/no handler registered/i.test(String(error?.message||error));
+async function livePollWithCompatibility(){
+  try{return await ipcRenderer.invoke('live:poll');}
+  catch(error){
+    if(!isMissingHandler(error))throw error;
+    try{
+      const settings=await ipcRenderer.invoke('settings:get');
+      const port=settings?.port||8080;
+      const snapshot=await ipcRenderer.invoke('live:read',port);
+      return {connected:true,port,snapshot,legacy:true};
+    }catch(legacyError){
+      return {connected:false,legacy:true,code:'older-main-process',
+        message:'The app is running an older background process. Fully close Swiss Army Knife and launch the updated EXE. '+
+          (legacyError?.message||String(legacyError))};
+    }
+  }
+}
 contextBridge.exposeInMainWorld('sak',{
   settings:()=>ipcRenderer.invoke('settings:get'),
-  livePoll:()=>ipcRenderer.invoke('live:poll'),
+  bridgeStatus:async()=>{
+    try{return await ipcRenderer.invoke('bridge:status');}
+    catch(error){if(isMissingHandler(error))return null;throw error;}
+  },
+  livePoll:livePollWithCompatibility,
   autoPort:()=>ipcRenderer.invoke('live:automatic'),
-  getAdBlocking:()=>ipcRenderer.invoke('adblock:status'),
+  getAdBlocking:async()=>{
+    try{return await ipcRenderer.invoke('adblock:status');}
+    catch(error){
+      if(!isMissingHandler(error))throw error;
+      return {enabled:false,active:false,source:'none',blockedRequests:0,
+        error:'Old app engine is running. Close all windows and relaunch Swiss Army Knife.'};
+    }
+  },
   setAdBlocking:enabled=>ipcRenderer.invoke('adblock:set',enabled),
   onAdBlockState:callback=>{
     const listener=(_event,value)=>callback(value);

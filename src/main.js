@@ -11,6 +11,8 @@ const {AutoDiscovery} = require('./autodiscovery');
 const {catalog}=require('./catalog');
 const {createTools}=require('./embedded-tools');
 const {makeIconLoader}=require('./icons');
+const {findFRM}=require('./live-diagnostics');
+const {makeAdBlock}=require('./adblock');
 
 const SITES = Object.freeze({
   map:'https://satisfactory-calculator.com/en/interactive-map',
@@ -33,6 +35,9 @@ const autodiscovery=new AutoDiscovery({load:async()=>({
   mode:'save',items:[],warnings:[],rateSource:'unavailable'
 })});
 let port=8080;
+let manualPort=false;
+let adBlockingEnabled=true;
+let adBlocking=null;
 
 function notify(message,isError=false) {
   if(mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('notice',{message,isError});
@@ -44,12 +49,14 @@ async function loadSettings(){
     selectedSession=settings.session ? blueprints.safeSession(settings.session) : '';
     manualSession=Boolean(settings.manualSession);
     port=validatePort(settings.port || 8080);
-  } catch {selectedSession='';manualSession=false;port=8080;}
+    manualPort=Boolean(settings.manualPort);
+    adBlockingEnabled=settings.adBlocking!==false;
+  } catch {selectedSession='';manualSession=false;port=8080;manualPort=false;adBlockingEnabled=true;}
 }
 async function persistSettings(){
   const file=settingsFile();
   await fs.mkdir(path.dirname(file),{recursive:true});
-  await fs.writeFile(file,JSON.stringify({session:selectedSession,manualSession,port},null,2));
+  await fs.writeFile(file,JSON.stringify({session:selectedSession,manualSession,port,manualPort,adBlocking:adBlockingEnabled},null,2));
 }
 function createMainWindow(){
   mainWindow=new BrowserWindow({
@@ -172,11 +179,62 @@ async function scanActiveSave() {
   return {...result,selectedSession,manualSession};
 }
 
+async function ensureProtection(){
+  if(adBlockingEnabled&&adBlocking&&!adBlocking.status().active)
+    return adBlocking.setEnabled(true);
+}
+
 function handlers() {
-  ipcMain.handle('tools:show',(_event,name,rect)=>integratedTools.show(name,rect));
+  // Bootstrap contract: the UI must know which Electron main version it is
+  // speaking with. Register every IPC handler BEFORE the renderer loads.
+  ipcMain.handle('bridge:status',()=>({
+    version:app.getVersion(),
+    protocol:2,
+    features:['live:poll','adblock:status','adblock:set','live:automatic']
+  }));
+  ipcMain.handle('adblock:status',()=>adBlocking?adBlocking.status():{
+    enabled:adBlockingEnabled,active:false,loading:true,error:null
+  });
+  ipcMain.handle('adblock:set',async(_event,enabled)=>{
+    if(typeof enabled!=='boolean')throw Error('Invalid privacy setting.');
+    adBlockingEnabled=enabled;
+    await persistSettings();
+    if(!adBlocking)throw Error('Ad blocking engine is still initializing.');
+    return adBlocking.setEnabled(enabled);
+  });
+  ipcMain.handle('live:poll',async()=>{
+    const result=await findFRM(port,{manual:manualPort});
+    if(!result.ok)return {connected:false,code:result.code,port,attempted:result.attempted,
+      config:result.config,message:result.message};
+    try{
+      const snapshot=await getLiveSnapshot(result.port,{world:result.world});
+      if(port!==result.port){
+        port=result.port;
+        await persistSettings();
+      }
+      return {connected:true,port,snapshot};
+    }catch(error){
+      return {connected:false,code:'incompatible',port:result.port,
+        config:result.config,message:'FRM is responding on port '+result.port+
+          ', but the data could not be read: '+(error.message||String(error))};
+    }
+  });
+  ipcMain.handle('live:automatic',async()=>{
+    manualPort=false;
+    port=8080;
+    await persistSettings();
+    return {port,manualPort};
+  });
+  ipcMain.handle('tools:show',async(_event,name,rect)=>{
+    if(name!==null)await ensureProtection();
+    return integratedTools.show(name,rect);
+  });
   ipcMain.handle('tools:reload',(_event,name)=>integratedTools.reload(name));
   ipcMain.handle('icons:get',(_event,className)=>iconLoader.get(port,className));
-  ipcMain.handle('catalog:open',()=>integratedCatalog.open());
+  ipcMain.handle('catalog:open',async()=>{
+    await ensureProtection();
+    return integratedCatalog.open();
+  });
   ipcMain.handle('catalog:show',(_e,show,rect)=>{
     if(typeof show!=='boolean')throw Error('Bad visibility flag');
     let bounds;
@@ -202,7 +260,7 @@ function handlers() {
     await persistSettings();
     return scanActiveSave();
   });
-  ipcMain.handle('settings:get',()=>({session:selectedSession,manualSession,port,blueprintRoot:blueprints.blueprintRoot()}));
+  ipcMain.handle('settings:get',()=>({session:selectedSession,manualSession,port,manualPort,adBlocking:adBlockingEnabled,blueprintRoot:blueprints.blueprintRoot()}));
   ipcMain.handle('saves:list',()=>listSaves());
   ipcMain.handle('saves:load',(_event,filePath)=>loadSaveSnapshot(filePath));
   ipcMain.handle('saves:choose',async()=>{
@@ -219,6 +277,7 @@ function handlers() {
   });
   ipcMain.handle('live:save-port',async(_event,newPort)=>{
     port=validatePort(newPort);
+    manualPort=true;
     await persistSettings();
     return port;
   });
@@ -244,7 +303,10 @@ function handlers() {
     if(!selectedSession) throw new Error('Choose a blueprint session first.');
     return shell.openPath(path.join(blueprints.blueprintRoot(),selectedSession));
   });
-  ipcMain.handle('site:open',(_event,which)=>openWebsite(which));
+  ipcMain.handle('site:open',async(_event,which)=>{
+    await ensureProtection();
+    return openWebsite(which);
+  });
   ipcMain.handle('site:external',(_event,which)=>{
     if(!(which in SITES)) throw new Error('Unknown site.');
     return shell.openExternal(SITES[which]);
@@ -252,9 +314,22 @@ function handlers() {
 }
 app.whenReady().then(async()=>{
   await loadSettings();
-  createMainWindow();
+  // IPC must be ready before we load the index.html renderer.
   handlers();
   registerDownloads();
+  const {session}=require('electron');
+  adBlocking=makeAdBlock({
+    ses:session.defaultSession,
+    cacheDir:path.join(app.getPath('userData'),'adblock-cache')
+  });
+  // Start protection before third-party web views are opened. Keep the
+  // application responsive while remote filter lists download.
+  const protectionStartup=adBlocking.setEnabled(adBlockingEnabled);
+  createMainWindow();
+  protectionStartup.then(result=>{
+    if(mainWindow&&!mainWindow.isDestroyed())mainWindow.webContents.send('adblock:state',result);
+    if(result.error)notify('Ad/tracker filter startup: '+result.error,true);
+  }).catch(error=>notify('Ad blocking setup failed: '+error.message,true));
   app.on('activate',()=>{if(BrowserWindow.getAllWindows().length===0)createMainWindow();});
 }).catch(error=>{dialog.showErrorBox('Swiss Army Knife',error.message);app.quit();});
 app.on('window-all-closed',()=>{if(process.platform!=='darwin')app.quit();});
